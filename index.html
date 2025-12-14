@@ -2,7 +2,14 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+
+	<meta name="apple-mobile-web-app-capable" content="yes">
+	<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+	<meta name="apple-mobile-web-app-title" content="MRR System">
+
+	<link rel="apple-touch-icon" href="./assets/apple-touch-icon.png">
+
     <title>MRR System | Saipem Material Control (v1.0)</title>
 	<link rel="icon" type="image/png" href="favicon-32x32.png">
     
@@ -63,6 +70,39 @@
     </script>
 
     <style>
+	/* Adicione isso no topo da sua tag <style> */
+:root {
+    /* Cores Base (Tema Claro) */
+    --main-background: #f1f5f9; /* slate-100 */
+    --main-text: #1e293b;       /* slate-800 */
+    --saipem-blue: #002D72;
+    --saipem-yellow: #FFCC00;
+    
+    /* Configuração de áreas seguras para iPhone (Notch/Home Bar) */
+    --safe-area-top: env(safe-area-inset-top);
+    --safe-area-bottom: env(safe-area-inset-bottom);
+}
+
+/* Suporte automático a Dark Mode (Opcional - Se o celular estiver no modo escuro) */
+@media (prefers-color-scheme: dark) {
+    :root {
+        --main-background: #0f172a; /* slate-900 */
+        --main-text: #f8fafc;       /* slate-50 */
+        /* O Azul Saipem pode ficar muito escuro no dark mode, clareamos um pouco */
+        --saipem-blue: #1e40af;      
+    }
+}
+
+/* Ajuste para o corpo ocupar a tela toda corretamente */
+html, body {
+    height: 100%;
+    overscroll-behavior-y: none; /* Evita o efeito "elástico" no scroll */
+}
+
+/* Ajuste do Header para respeitar o "Notch" do iPhone */
+header {
+    padding-top: max(12px, var(--safe-area-top)); /* Usa o maior valor */
+}
         body { background-color: #f1f5f9; }
         ::-webkit-scrollbar { width: 8px; height: 8px; }
         ::-webkit-scrollbar-track { background: transparent; }
@@ -109,36 +149,37 @@
 </div>
 
     <!-- Header -->
-    <header class="bg-saipem-blue text-white shadow-lg flex items-center justify-between px-4 py-3 z-20 relative flex-wrap gap-y-2">
-    <div class="flex items-center gap-3 select-none cursor-pointer group" onclick="App.toScreen('uploadScreen')">
-        <div class="w-10 h-10 bg-saipem-yellow text-saipem-blue rounded-lg font-extrabold flex items-center justify-center text-xl shadow-md group-hover:scale-105 transition-transform">S</div>
+<header class="bg-saipem-blue text-white shadow-lg flex items-center justify-between px-3 py-2 md:px-4 md:py-3 z-20 relative flex-wrap gap-y-2">
+    <div class="flex items-center gap-2 md:gap-3 select-none cursor-pointer group" onclick="App.toScreen('uploadScreen')">
+        <div class="w-8 h-8 md:w-10 md:h-10 bg-saipem-yellow text-saipem-blue rounded-lg font-extrabold flex items-center justify-center text-lg md:text-xl shadow-md group-hover:scale-105 transition-transform">S</div>
+        
         <div class="leading-tight">
-            <h1 class="text-lg md:text-xl font-bold tracking-tight">MRR System</h1>
-            <p class="text-[10px] text-blue-200 uppercase tracking-[0.2em] font-semibold">Material Receipt</p>
+            <h1 class="text-base md:text-xl font-bold tracking-tight">MRR System</h1>
+            <p class="text-[8px] md:text-[10px] text-blue-200 uppercase tracking-[0.2em] font-semibold">Material Receipt</p>
         </div>
         
         <span class="hidden md:block opacity-50 text-xs font-medium align-top ml-1 pt-1">v1 (Created by Fransley)</span>
     </div>
 
-    <div class="flex items-center gap-2 md:gap-4 ml-auto">
-        <button onclick="App.toggleLanguage()" class="flex items-center gap-1 text-sm text-blue-100 hover:text-white transition-colors bg-white/5 hover:bg-white/10 px-3 py-2 rounded-lg border border-transparent hover:border-white/10" title="Change Language">
+    <div class="flex items-center gap-1.5 md:gap-4 ml-auto">
+        <button onclick="App.toggleLanguage()" class="flex items-center gap-1 text-sm text-blue-100 hover:text-white transition-colors bg-white/5 hover:bg-white/10 px-2 py-1.5 md:px-3 md:py-2 rounded-lg border border-transparent hover:border-white/10" title="Change Language">
             <i class="ph-bold ph-globe text-lg"></i>
             <span id="currentLangDisplay" class="font-bold uppercase text-xs">PT</span>
         </button>
 
-        <button onclick="App.toggleHistory()" class="group flex items-center gap-2 text-sm text-blue-100 hover:text-white transition-colors bg-white/5 hover:bg-white/10 px-3 md:px-4 py-2 rounded-lg border border-transparent hover:border-white/10">
+        <button onclick="App.toggleHistory()" class="group flex items-center gap-2 text-sm text-blue-100 hover:text-white transition-colors bg-white/5 hover:bg-white/10 px-2 py-1.5 md:px-4 md:py-2 rounded-lg border border-transparent hover:border-white/10">
             <i class="ph ph-clock-counter-clockwise text-lg"></i>
             <span class="hidden md:inline font-medium" data-i18n="history">Histórico</span>
         </button>
 
-        <div class="h-8 w-px bg-white/10 mx-1"></div>
+        <div class="h-6 md:h-8 w-px bg-white/10 mx-0.5 md:mx-1"></div>
 
-        <button onclick="App.openUserConfig()" class="flex items-center gap-3 hover:bg-white/5 p-1 rounded-lg transition-colors border border-transparent hover:border-white/10">
+        <button onclick="App.openUserConfig()" class="flex items-center gap-2 md:gap-3 hover:bg-white/5 p-1 rounded-lg transition-colors border border-transparent hover:border-white/10">
             <div class="text-right hidden sm:block leading-tight">
                 <p class="text-xs font-bold text-white truncate max-w-[100px]" id="headerUserName" data-i18n-placeholder="user_generic">Suman Marcio</p>
                 <p class="text-[10px] text-blue-300 font-medium" id="headerUserRole" data-i18n-placeholder="role_generic">Storekeeper (PPC)</p>
             </div>
-            <div class="w-9 h-9 rounded-full bg-gradient-to-br from-saipem-yellow to-yellow-500 text-saipem-blue flex items-center justify-center text-sm font-bold shadow-md ring-2 ring-saipem-blue ring-offset-2 ring-offset-saipem-blue" id="headerUserAvatar">S</div>
+            <div class="w-8 h-8 md:w-9 md:h-9 rounded-full bg-gradient-to-br from-saipem-yellow to-yellow-500 text-saipem-blue flex items-center justify-center text-xs md:text-sm font-bold shadow-md ring-2 ring-saipem-blue ring-offset-2 ring-offset-saipem-blue" id="headerUserAvatar">S</div>
         </button>
     </div>
 </header>
@@ -323,90 +364,109 @@
     </div>
 
     <!-- Split / Edit Modal -->
-    <div id="splitModal" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40 hidden flex items-center justify-center p-4 transition-opacity duration-200">
-        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden animate-slide-up ring-1 ring-black/5 m-4">
-            <div class="px-4 md:px-8 py-5 bg-white border-b border-slate-100 flex justify-between items-start shrink-0">
-                <div class="pr-6 flex-1">
-                    <div class="flex items-center gap-3 mb-2 flex-wrap">
-                        <span id="modalItemBadge" class="bg-saipem-blue text-white text-[10px] font-extrabold px-2.5 py-1 rounded-full shadow-sm tracking-wide">ITEM 00</span>
-                        <span id="modalCode" class="font-mono text-sm text-slate-600 font-bold bg-slate-100 px-2 py-0.5 rounded border border-slate-200 select-all">CODE</span>
-                        <span id="modalCat" class="text-[10px] uppercase font-bold text-saipem-yellow bg-saipem-blue/90 px-2 py-0.5 rounded ml-2">CATEGORY</span>
-                    </div>
-                    <div class="relative group">
-                        <textarea id="inputDesc" class="w-full bg-transparent border border-transparent hover:border-slate-200 focus:border-saipem-blue focus:bg-slate-50 rounded p-1 -ml-1 text-base font-semibold text-slate-800 leading-snug outline-none resize-none transition-all placeholder:text-slate-300" rows="2" data-i18n-placeholder="mat_desc_placeholder" placeholder="Material Description"></textarea>
-                    </div>
+   <div id="splitModal" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40 hidden flex items-center justify-center p-2 md:p-4 transition-opacity duration-200">
+    <div class="bg-white rounded-xl md:rounded-2xl shadow-2xl w-full max-w-3xl max-h-[95vh] flex flex-col overflow-hidden animate-slide-up ring-1 ring-black/5 m-0 md:m-4">
+        
+        <!-- Cabeçalho Compacto -->
+        <div class="px-3 py-2 md:px-8 md:py-5 bg-white border-b border-slate-100 flex justify-between items-start shrink-0">
+            <div class="pr-2 md:pr-6 flex-1 min-w-0">
+                <div class="flex items-center gap-1.5 md:gap-3 mb-1 md:mb-2 flex-wrap">
+                    <span id="modalItemBadge" class="bg-saipem-blue text-white text-[9px] md:text-[10px] font-extrabold px-1.5 py-0.5 md:px-2.5 md:py-1 rounded-full shadow-sm tracking-wide">ITEM 00</span>
+                    <span id="modalCode" class="font-mono text-[10px] md:text-sm text-slate-600 font-bold bg-slate-100 px-1.5 py-0.5 md:px-2 rounded border border-slate-200 select-all truncate">CODE</span>
+                    <span id="modalCat" class="text-[8px] md:text-[10px] uppercase font-bold text-saipem-yellow bg-saipem-blue/90 px-1.5 py-0.5 md:px-2 rounded">CAT</span>
                 </div>
-                <div class="text-right bg-slate-50 px-5 py-3 rounded-xl border border-slate-100 shadow-inner shrink-0 ml-4">
-                    <p class="text-[9px] text-slate-400 uppercase font-extrabold tracking-widest mb-0.5" data-i18n="balance">Balance</p>
-                    <p class="text-2xl font-extrabold text-saipem-blue leading-none tracking-tight" id="modalBalance">0</p>
-                    <p class="text-[10px] text-slate-400 text-right font-bold mt-0.5" id="modalUnit">UN</p>
+                
+                <div class="relative group">
+                    <textarea id="inputDesc" class="w-full bg-transparent border border-transparent hover:border-slate-200 focus:border-saipem-blue focus:bg-slate-50 rounded p-0.5 -ml-0.5 text-xs md:text-base font-semibold text-slate-800 leading-tight outline-none resize-none transition-all placeholder:text-slate-300" rows="2" data-i18n-placeholder="mat_desc_placeholder" placeholder="Material Description"></textarea>
                 </div>
             </div>
 
-            <div class="p-4 md:p-8 overflow-y-auto flex-1 bg-white space-y-8">
-                <form id="splitForm" onsubmit="event.preventDefault(); App.checkSplit();" class="space-y-6">
-                    <div class="flex flex-col md:flex-row gap-5">
-                        <div class="w-full md:w-1/3 group">
-                            <label class="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1.5 group-focus-within:text-saipem-blue transition-colors"><span data-i18n="heat_no">Heat Number</span> <span class="text-red-500">*</span></label>
-                            <input type="text" id="inputHeat" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 text-sm font-bold text-slate-700 uppercase focus:border-saipem-blue focus:ring-1 focus:ring-saipem-blue focus:bg-white shadow-sm outline-none transition-all" required data-i18n-placeholder="heat_placeholder" placeholder="Ex: HT-123">
-                        </div>
-                        <div class="w-full md:w-1/3 group">
-                            <label class="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1.5 group-focus-within:text-saipem-blue transition-colors"><span data-i18n="qty_received">Qty Received</span> <span class="text-red-500">*</span></label>
-                            <input type="number" id="inputQty" step="0.001" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 text-lg font-extrabold text-saipem-blue focus:border-saipem-blue focus:ring-1 focus:ring-saipem-blue focus:bg-white shadow-sm outline-none transition-all" required placeholder="0.00">
-                        </div>
-                        <div class="w-full md:w-1/3 group">
-                            <label class="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1.5 group-focus-within:text-saipem-blue transition-colors" data-i18n="invoice">Invoice (NF)</label>
-                            <input type="text" id="inputInv" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 text-sm font-semibold text-slate-700 focus:border-saipem-blue focus:ring-1 focus:ring-saipem-blue focus:bg-white shadow-sm outline-none transition-all" data-i18n-placeholder="invoice_placeholder" placeholder="NF-e 000">
-                        </div>
-                    </div>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
-                        <div class="group">
-                            <label class="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1.5 group-focus-within:text-saipem-blue" data-i18n="trace_tag">Traceability Tag</label>
-                            <div class="relative">
-                                <i class="ph-bold ph-tag absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"></i>
-                                <input type="text" id="inputTrace" class="w-full pl-10 bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-sm uppercase font-semibold focus:bg-white focus:border-saipem-blue focus:ring-1 focus:ring-saipem-blue outline-none transition-all" data-i18n-placeholder="trace_placeholder" placeholder="RA-PF-XXX">
-                            </div>
-                        </div>
-                        <div>
-                            <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1.5" data-i18n="remarks">Remarks</label>
-                            <input type="text" id="inputRemarks" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-sm focus:bg-white focus:border-saipem-blue focus:ring-1 focus:ring-saipem-blue outline-none transition-all" placeholder="...">
-                        </div>
-                    </div>
-                    <div class="bg-blue-50 rounded-xl p-5 border border-blue-100 relative group transition-all" id="dimContainer">
-                        <div class="flex justify-between items-center mb-4 flex-wrap gap-2">
-                            <h4 class="text-xs font-bold text-saipem-blue uppercase flex items-center gap-2">
-                                <span class="w-6 h-6 rounded bg-white flex items-center justify-center shadow-sm text-saipem-blue"><i class="ph-fill ph-ruler"></i></span>
-                                <span data-i18n="dimensions">Dimensions (mm)</span>
-                            </h4>
-                            <div class="flex items-center gap-3">
-                                <span class="text-[10px] font-bold text-slate-500 uppercase tracking-wider"><span data-i18n="calc_weight">Calc. Weight</span> (kg):</span>
-                                <input type="number" id="inputWeight" class="w-28 bg-white border border-blue-200 rounded-lg px-3 py-1.5 text-right font-bold text-saipem-blue text-sm focus:ring-2 focus:ring-saipem-blue outline-none shadow-sm" placeholder="0.00" step="0.01">
-                            </div>
-                        </div>
-                        <div class="grid grid-cols-2 md:grid-cols-4 gap-4" id="dimGrid"></div>
-                        <div id="eaMessage" class="hidden text-center text-xs text-slate-400 font-medium italic py-2" data-i18n="unit_msg">
-                            Item type Unit/Piece (EA). Dimensions not applicable.
-                        </div>
-                    </div>
-                    <button type="submit" class="w-full bg-saipem-yellow hover:bg-yellow-400 text-saipem-blue font-bold py-4 rounded-xl shadow-lg hover:shadow-xl transition-all active:scale-[0.99] flex items-center justify-center gap-2 text-sm uppercase tracking-wide">
-                        <i class="ph-bold ph-plus-circle text-lg"></i> <span data-i18n="add_batch">Add Batch</span>
-                    </button>
-                </form>
-                <div class="pt-6 border-t border-slate-100">
-                    <h4 class="text-xs font-extrabold text-slate-400 uppercase mb-4 flex items-center gap-2">
-                        <i class="ph-bold ph-list-dashes"></i> <span data-i18n="registered_batches">Registered Batches</span>
-                    </h4>
-                    <div id="modalSplitsList" class="space-y-2.5 max-h-40 overflow-y-auto pr-1"></div>
-                </div>
-            </div>
-            
-            <div class="p-5 bg-slate-50 border-t border-slate-200 text-right shrink-0 flex justify-end">
-                <button onclick="App.closeModal('splitModal')" class="px-8 py-3 bg-white border border-slate-200 text-slate-600 font-bold rounded-xl text-sm hover:bg-slate-100 hover:text-slate-800 transition-colors shadow-sm" data-i18n="finish">
-                    Finish Editing
-                </button>
+            <div class="text-right bg-slate-50 px-2 py-1 md:px-5 md:py-3 rounded-lg md:rounded-xl border border-slate-100 shadow-inner shrink-0 ml-2">
+                <p class="text-[7px] md:text-[9px] text-slate-400 uppercase font-extrabold tracking-widest mb-0.5" data-i18n="balance">Balance</p>
+                <p class="text-lg md:text-2xl font-extrabold text-saipem-blue leading-none tracking-tight" id="modalBalance">0</p>
+                <p class="text-[8px] md:text-[10px] text-slate-400 text-right font-bold mt-0.5" id="modalUnit">UN</p>
             </div>
         </div>
+
+        <!-- Corpo com Scroll -->
+        <div class="p-3 md:p-8 overflow-y-auto flex-1 bg-white">
+            <form id="splitForm" onsubmit="event.preventDefault(); App.checkSplit();" class="space-y-4 md:space-y-6">
+                
+                <!-- GRID NO MOBILE: Heat e Qty lado a lado para economizar espaço -->
+                <div class="grid grid-cols-2 md:flex md:flex-row gap-3 md:gap-5">
+                    
+                    <!-- Heat Number -->
+                    <div class="col-span-1 md:w-1/3 group">
+                        <label class="block text-[9px] md:text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1 group-focus-within:text-saipem-blue transition-colors"><span data-i18n="heat_no">Heat No</span> <span class="text-red-500">*</span></label>
+                        <input type="text" id="inputHeat" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 md:p-3 text-xs md:text-sm font-bold text-slate-700 uppercase focus:border-saipem-blue focus:ring-1 focus:ring-saipem-blue focus:bg-white shadow-sm outline-none transition-all" required data-i18n-placeholder="heat_placeholder" placeholder="Ex: HT-123">
+                    </div>
+
+                    <!-- Qty Received -->
+                    <div class="col-span-1 md:w-1/3 group">
+                        <label class="block text-[9px] md:text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1 group-focus-within:text-saipem-blue transition-colors"><span data-i18n="qty_received">Qty Received</span> <span class="text-red-500">*</span></label>
+                        <input type="number" id="inputQty" step="0.001" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 md:p-3 text-sm md:text-lg font-extrabold text-saipem-blue focus:border-saipem-blue focus:ring-1 focus:ring-saipem-blue focus:bg-white shadow-sm outline-none transition-all" required placeholder="0.00">
+                    </div>
+
+                    <!-- Invoice (Ocupa linha inteira no mobile grid se quiser, ou col-span-2) -->
+                    <div class="col-span-2 md:w-1/3 group">
+                        <label class="block text-[9px] md:text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1 group-focus-within:text-saipem-blue transition-colors" data-i18n="invoice">Invoice (NF)</label>
+                        <input type="text" id="inputInv" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 md:p-3 text-xs md:text-sm font-semibold text-slate-700 focus:border-saipem-blue focus:ring-1 focus:ring-saipem-blue focus:bg-white shadow-sm outline-none transition-all" data-i18n-placeholder="invoice_placeholder" placeholder="NF-e 000">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-5">
+                    <div class="group">
+                        <label class="block text-[9px] md:text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1 group-focus-within:text-saipem-blue" data-i18n="trace_tag">Traceability Tag</label>
+                        <div class="relative">
+                            <i class="ph-bold ph-tag absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                            <input type="text" id="inputTrace" class="w-full pl-8 md:pl-10 bg-slate-50 border border-slate-200 rounded-lg p-2 md:p-2.5 text-xs md:text-sm uppercase font-semibold focus:bg-white focus:border-saipem-blue focus:ring-1 focus:ring-saipem-blue outline-none transition-all" data-i18n-placeholder="trace_placeholder" placeholder="RA-PF-XXX">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-[9px] md:text-[10px] font-bold text-slate-500 uppercase mb-1" data-i18n="remarks">Remarks</label>
+                        <input type="text" id="inputRemarks" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 md:p-2.5 text-xs md:text-sm focus:bg-white focus:border-saipem-blue focus:ring-1 focus:ring-saipem-blue outline-none transition-all" placeholder="...">
+                    </div>
+                </div>
+
+                <!-- Box de Dimensões Compacto -->
+                <div class="bg-blue-50/50 rounded-xl p-3 md:p-5 border border-blue-100 relative group transition-all" id="dimContainer">
+                    <div class="flex justify-between items-center mb-2 md:mb-4 flex-wrap gap-2">
+                        <h4 class="text-[10px] md:text-xs font-bold text-saipem-blue uppercase flex items-center gap-2">
+                            <span class="w-5 h-5 md:w-6 md:h-6 rounded bg-white flex items-center justify-center shadow-sm text-saipem-blue"><i class="ph-fill ph-ruler text-xs md:text-base"></i></span>
+                            <span data-i18n="dimensions">Dimensions (mm)</span>
+                        </h4>
+                        <div class="flex items-center gap-2 md:gap-3">
+                            <span class="text-[8px] md:text-[10px] font-bold text-slate-500 uppercase tracking-wider"><span data-i18n="calc_weight">Weight</span> (kg):</span>
+                            <input type="number" id="inputWeight" class="w-20 md:w-28 bg-white border border-blue-200 rounded-lg px-2 py-1 md:px-3 md:py-1.5 text-right font-bold text-saipem-blue text-xs md:text-sm focus:ring-2 focus:ring-saipem-blue outline-none shadow-sm" placeholder="0.00" step="0.01">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-4 gap-2 md:gap-4" id="dimGrid"></div>
+                    <div id="eaMessage" class="hidden text-center text-[10px] text-slate-400 font-medium italic py-1" data-i18n="unit_msg">
+                        Item Unit/Piece (EA). No dims.
+                    </div>
+                </div>
+
+                <button type="submit" class="w-full bg-saipem-yellow hover:bg-yellow-400 text-saipem-blue font-bold py-3 md:py-4 rounded-xl shadow-lg hover:shadow-xl transition-all active:scale-[0.99] flex items-center justify-center gap-2 text-xs md:text-sm uppercase tracking-wide">
+                    <i class="ph-bold ph-plus-circle text-base md:text-lg"></i> <span data-i18n="add_batch">Add Batch</span>
+                </button>
+            </form>
+
+            <div class="pt-4 md:pt-6 border-t border-slate-100 mt-4 md:mt-0">
+                <h4 class="text-[10px] md:text-xs font-extrabold text-slate-400 uppercase mb-2 md:mb-4 flex items-center gap-2">
+                    <i class="ph-bold ph-list-dashes"></i> <span data-i18n="registered_batches">Registered Batches</span>
+                </h4>
+                <!-- Lista com altura reduzida no mobile -->
+                <div id="modalSplitsList" class="space-y-2 max-h-32 md:max-h-40 overflow-y-auto pr-1"></div>
+            </div>
+        </div>
+        
+        <div class="p-3 md:p-5 bg-slate-50 border-t border-slate-200 text-right shrink-0 flex justify-end">
+            <button onclick="App.closeModal('splitModal')" class="w-full md:w-auto px-6 py-2.5 md:px-8 md:py-3 bg-white border border-slate-200 text-slate-600 font-bold rounded-xl text-xs md:text-sm hover:bg-slate-100 hover:text-slate-800 transition-colors shadow-sm" data-i18n="finish">
+                Finish Editing
+            </button>
+        </div>
     </div>
+</div>
 
     <!-- Report Config Modal (Optimized) -->
     <div id="reportConfigModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[55] hidden flex items-center justify-center">
