@@ -1,0 +1,2296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MRR System | Saipem Material Control (v1.0)</title>
+	<link rel="icon" type="image/png" href="favicon-32x32.png">
+    
+    <!-- Tailwind CSS -->
+    <script src="./assets/tailwind.js"></script>
+    
+    <!-- SheetJS (Excel) -->
+    <script src="./assets/xlsx.js"></script>
+    
+    <!-- Icons -->
+    <script src="./assets/phosphor.js"></script>
+	
+	<!-- Configuração Tailwind Offline -->
+<script>
+    tailwind.config = {
+        theme: {
+            extend: {
+                colors: {
+                    saipem: { blue: '#002D72', dark: '#001a42', yellow: '#FFCC00', light: '#f8fafc', gray: '#e2e8f0' }
+                },
+                // Usando fontes do sistema para não depender do Google Fonts offline
+                fontFamily: { 
+                    sans: ['ui-sans-serif', 'system-ui', 'sans-serif'], 
+                    mono: ['ui-monospace', 'SFMono-Regular', 'monospace'] 
+                },
+                animation: { 'slide-up': 'slideUp 0.3s ease-out forwards', 'fade-in': 'fadeIn 0.2s ease-out forwards' },
+                keyframes: {
+                    fadeIn: { '0%': { opacity: '0' }, '100%': { opacity: '1' } },
+                    slideUp: { '0%': { transform: 'translateY(20px)', opacity: '0' }, '100%': { transform: 'translateY(0)', opacity: '1' } }
+                }
+            }
+        }
+    }
+</script>
+    
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+	<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#002D72">
+<link rel="apple-touch-icon" href="icon-192.png">
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        saipem: { blue: '#002D72', dark: '#001a42', yellow: '#FFCC00', light: '#f8fafc', gray: '#e2e8f0' }
+                    },
+                    fontFamily: { sans: ['Inter', 'sans-serif'], mono: ['JetBrains Mono', 'monospace'] },
+                    animation: { 'slide-up': 'slideUp 0.3s ease-out forwards', 'fade-in': 'fadeIn 0.2s ease-out forwards' },
+                    keyframes: {
+                        fadeIn: { '0%': { opacity: '0' }, '100%': { opacity: '1' } },
+                        slideUp: { '0%': { transform: 'translateY(20px)', opacity: '0' }, '100%': { transform: 'translateY(0)', opacity: '1' } }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body { background-color: #f1f5f9; }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        .spinner { border: 3px solid rgba(255,255,255,0.3); border-radius: 50%; border-top: 3px solid #FFCC00; width: 24px; height: 24px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        /* Fix inputs */
+        input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+        /* Removemos o min-height fixo para o padding controlar a altura no mobile */
+		.item-card { height: auto; }
+        .trans-all { transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
+        .sig-preview { max-height: 40px; max-width: 100px; object-fit: contain; display: block; margin-top: 5px; }
+    </style>
+</head>
+<body class="h-screen flex flex-col text-slate-800 overflow-hidden bg-slate-100">
+
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./sw.js')
+        .then(reg => console.log('SW registrado!', reg))
+        .catch(err => console.log('Falha no SW:', err));
+    });
+  }
+</script>
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="fixed inset-0 bg-saipem-blue/90 z-[100] hidden flex flex-col items-center justify-center text-white backdrop-blur-sm">
+        <div class="spinner w-12 h-12 mb-4 border-4"></div>
+        <p class="font-bold text-lg animate-pulse" id="loadingText" data-i18n="processing">Processing...</p>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed top-20 right-5 z-[90] transform transition-all duration-300 bg-white shadow-2xl rounded-xl border-l-4 border-green-500 p-5 min-w-[320px] max-w-sm flex items-center gap-4 translate-x-full opacity-0 pointer-events-none">
+    <div id="toastIcon" class="shrink-0 text-2xl">
+        <i class="ph-fill ph-check-circle text-green-500"></i>
+    </div>
+    <div class="flex-1 min-w-0">
+        <h4 class="font-bold text-sm truncate text-slate-800" id="toastTitle">Notification</h4>
+        <p class="text-xs text-slate-500 break-words font-medium" id="toastMsg">Message...</p>
+    </div>
+    <button id="toastAction" class="hidden text-xs font-bold text-saipem-blue hover:text-saipem-dark hover:underline uppercase px-2 tracking-wide" data-i18n="undo">Undo</button>
+</div>
+
+    <!-- Header -->
+    <header class="bg-saipem-blue text-white shadow-lg flex items-center justify-between px-4 py-3 z-20 relative flex-wrap gap-y-2">
+    <div class="flex items-center gap-3 select-none cursor-pointer group" onclick="App.toScreen('uploadScreen')">
+        <div class="w-10 h-10 bg-saipem-yellow text-saipem-blue rounded-lg font-extrabold flex items-center justify-center text-xl shadow-md group-hover:scale-105 transition-transform">S</div>
+        <div class="leading-tight">
+            <h1 class="text-lg md:text-xl font-bold tracking-tight">MRR System</h1>
+            <p class="text-[10px] text-blue-200 uppercase tracking-[0.2em] font-semibold">Material Receipt</p>
+        </div>
+        
+        <span class="hidden md:block opacity-50 text-xs font-medium align-top ml-1 pt-1">v1 (Created by Fransley)</span>
+    </div>
+
+    <div class="flex items-center gap-2 md:gap-4 ml-auto">
+        <button onclick="App.toggleLanguage()" class="flex items-center gap-1 text-sm text-blue-100 hover:text-white transition-colors bg-white/5 hover:bg-white/10 px-3 py-2 rounded-lg border border-transparent hover:border-white/10" title="Change Language">
+            <i class="ph-bold ph-globe text-lg"></i>
+            <span id="currentLangDisplay" class="font-bold uppercase text-xs">PT</span>
+        </button>
+
+        <button onclick="App.toggleHistory()" class="group flex items-center gap-2 text-sm text-blue-100 hover:text-white transition-colors bg-white/5 hover:bg-white/10 px-3 md:px-4 py-2 rounded-lg border border-transparent hover:border-white/10">
+            <i class="ph ph-clock-counter-clockwise text-lg"></i>
+            <span class="hidden md:inline font-medium" data-i18n="history">Histórico</span>
+        </button>
+
+        <div class="h-8 w-px bg-white/10 mx-1"></div>
+
+        <button onclick="App.openUserConfig()" class="flex items-center gap-3 hover:bg-white/5 p-1 rounded-lg transition-colors border border-transparent hover:border-white/10">
+            <div class="text-right hidden sm:block leading-tight">
+                <p class="text-xs font-bold text-white truncate max-w-[100px]" id="headerUserName" data-i18n-placeholder="user_generic">Suman Marcio</p>
+                <p class="text-[10px] text-blue-300 font-medium" id="headerUserRole" data-i18n-placeholder="role_generic">Storekeeper (PPC)</p>
+            </div>
+            <div class="w-9 h-9 rounded-full bg-gradient-to-br from-saipem-yellow to-yellow-500 text-saipem-blue flex items-center justify-center text-sm font-bold shadow-md ring-2 ring-saipem-blue ring-offset-2 ring-offset-saipem-blue" id="headerUserAvatar">S</div>
+        </button>
+    </div>
+</header>
+
+    <main class="flex-1 overflow-hidden relative flex flex-col">
+        
+        <!-- Upload Screen -->
+        <div id="uploadScreen" class="absolute inset-0 flex flex-col z-10 overflow-y-auto bg-slate-100">
+             <div class="flex flex-col md:flex-row h-full">
+                <!-- Left: Action Area -->
+                <div class="w-full md:w-1/2 p-4 md:p-10 flex flex-col items-center justify-center border-b md:border-b-0 md:border-r border-slate-200 bg-white shadow-[10px_0_30px_rgba(0,0,0,0.02)] z-10">
+                    <div class="w-full max-w-md animate-slide-up">
+                        <div class="text-center mb-10">
+                             <div class="w-20 h-20 bg-blue-50 text-saipem-blue rounded-full flex items-center justify-center mx-auto mb-6 shadow-inner border border-blue-100">
+                                <i class="ph ph-file-csv text-4xl"></i>
+                            </div>
+                            <h2 class="text-3xl font-extrabold text-slate-800 mb-2 tracking-tight" data-i18n="import_title">Import PO Data</h2>
+                            <p class="text-slate-500 text-sm leading-relaxed font-medium" data-i18n="import_msg">Upload Packing List or PO to start.</p>
+                        </div>
+                        
+                        <label class="flex flex-col items-center justify-center w-full h-32 border-2 border-slate-300 border-dashed rounded-2xl cursor-pointer bg-slate-50 hover:bg-blue-50 hover:border-saipem-blue transition-all group">
+                            <div class="flex flex-col items-center justify-center pt-5 pb-6">
+                                <i class="ph-bold ph-upload-simple text-2xl text-slate-400 group-hover:text-saipem-blue mb-2 transition-colors"></i>
+                                <p class="text-sm text-slate-500 font-bold group-hover:text-saipem-blue transition-colors" data-i18n="click_to_upload">Click to upload Excel/CSV</p>
+                            </div>
+                            <input type="file" id="fileInput" class="hidden" accept=".xlsx,.xls,.csv" onchange="App.handleFile(this)">
+                        </label>
+
+                        <div class="mt-8 flex items-center gap-4">
+                            <div class="h-px bg-slate-200 flex-1"></div>
+                            <span class="text-xs font-bold text-slate-400 uppercase" data-i18n="or">OR</span>
+                            <div class="h-px bg-slate-200 flex-1"></div>
+                        </div>
+
+                        <div class="mt-8 text-center">
+                            <button onclick="App.openFreeIssueModal()" class="text-sm font-bold text-slate-500 hover:text-saipem-blue flex items-center justify-center gap-2 transition-colors mx-auto p-3 rounded-lg hover:bg-slate-50 border border-transparent hover:border-slate-200">
+                                <i class="ph-bold ph-plus-circle text-lg"></i> <span data-i18n="manual_entry">Manual Entry / Free Issue</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right: Saved POs -->
+                <div class="w-full md:w-1/2 bg-slate-50/50 p-4 md:p-10 flex flex-col">
+                    <h3 class="text-sm font-extrabold text-slate-400 uppercase tracking-widest mb-6 flex items-center gap-2">
+                        <i class="ph-bold ph-database"></i> <span data-i18n="saved_pos">Saved Purchase Orders</span>
+                    </h3>
+                    <div id="savedPOsContainer" class="flex-1 overflow-y-auto pr-2 space-y-3">
+                        <!-- PO Cards injected here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- List Screen -->
+        <div id="listScreen" class="flex-1 flex flex-col h-full hidden bg-slate-100">
+            <!-- Dashboard Bar -->
+            <div class="bg-white border-b border-slate-200 px-4 md:px-8 py-3 md:py-5 shadow-sm shrink-0 z-10">
+    <!-- py-3 no mobile, py-5 no desktop -->
+
+    <div class="flex justify-between items-end mb-2 md:mb-3">
+        
+        <!-- Lado Esquerdo -->
+        <div class="flex-1 min-w-0 pr-2"> <!-- min-w-0 ajuda a truncar texto longo -->
+            
+            <h2 class="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest flex items-center gap-1.5 mb-0.5">
+                <i class="ph-bold ph-hash"></i> <span data-i18n="po_ref">Referência PO</span>
+            </h2>
+
+            <div class="flex flex-col">
+                <div class="flex items-baseline gap-2 md:gap-4 flex-wrap">
+                    <!-- PO Number: Reduzido de text-3xl para text-xl no mobile -->
+                    <span class="text-xl sm:text-2xl md:text-3xl font-extrabold text-slate-800 tracking-tighter leading-none" id="dashPoNumber">1491507</span>
+                    
+                    <!-- Badge Stats: Padding reduzido -->
+                    <span class="text-[10px] md:text-xs font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 md:px-2.5 md:py-1 rounded-md border border-slate-200 whitespace-nowrap" id="dashStatsText" data-i18n-format="dash_stats_format">1/1</span>
+                </div>
+                
+                <!-- Fornecedor: Truncate adicionado para não quebrar layout -->
+                <span class="text-[10px] font-bold text-saipem-blue mt-0.5 truncate" id="dashSupplier">---</span>
+            </div>
+        </div>
+
+        <!-- Lado Direito (Porcentagem) -->
+        <div class="text-right">
+            <!-- Porcentagem: Reduzido de text-4xl para text-2xl no mobile -->
+            <span class="text-2xl sm:text-3xl md:text-4xl font-extrabold text-saipem-blue tracking-tighter leading-none" id="dashPercentage">0%</span>
+        </div>
+    </div>
+
+    <!-- Barra de Progresso: Altura reduzida de h-2.5 para h-1.5 no mobile -->
+    <div class="w-full bg-slate-100 rounded-full h-1.5 md:h-2.5 overflow-hidden">
+        <div id="dashProgressBar" class="bg-gradient-to-r from-saipem-yellow to-yellow-400 h-full rounded-full transition-all duration-700 ease-out shadow-[0_0_10px_rgba(255,204,0,0.4)]" style="width: 17%;"></div>
+    </div>
+
+</div>
+
+            <!-- Toolbar -->
+            <div class="px-4 md:px-8 py-4 bg-white border-b border-slate-200 flex flex-col md:flex-row gap-4 items-center shrink-0 shadow-[0_4px_20px_rgba(0,0,0,0.03)] z-0 flex-wrap">
+    
+    <div class="relative w-full md:flex-1 group">
+        <i class="ph-bold ph-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-lg group-focus-within:text-saipem-blue transition-colors"></i>
+        <input type="text" id="searchInput" placeholder="Filter by code..." onkeyup="App.handleSearch(this.value)" class="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:outline-none focus:border-saipem-blue focus:ring-1 focus:ring-saipem-blue transition-all focus:bg-white shadow-inner">
+    </div>
+
+    <div class="grid grid-cols-2 md:flex gap-3 w-full md:w-auto">
+        
+        <button onclick="App.openFreeIssueModal()" class="px-4 py-3 bg-white border border-saipem-blue text-saipem-blue rounded-xl text-sm font-bold hover:bg-blue-50 transition-all flex items-center justify-center gap-2 shadow-sm whitespace-nowrap active:scale-95">
+            <i class="ph-bold ph-plus"></i> <span data-i18n="new_item">Novo Item</span>
+        </button>
+
+        <button onclick="App.reset()" class="px-5 py-3 bg-white border border-red-200 text-red-600 rounded-xl text-sm font-bold hover:bg-red-50 hover:border-red-300 transition-all flex items-center justify-center gap-2 shadow-sm whitespace-nowrap active:scale-95">
+            <i class="ph-bold ph-arrow-counter-clockwise"></i> <span data-i18n="reset">Fechar PO</span>
+        </button>
+
+        <button onclick="App.openReportConfig()" class="col-span-2 md:col-span-auto md:flex-auto px-6 py-3 bg-saipem-blue text-white rounded-xl text-sm font-bold hover:bg-saipem-dark shadow-lg shadow-blue-900/10 hover:shadow-xl hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2 active:scale-95 whitespace-nowrap">
+            <i class="ph-bold ph-printer text-lg"></i> <span data-i18n="print_report">Imprimir Relatório</span>
+        </button>
+        
+    </div>
+</div>
+
+            <!-- Items List -->
+            <div class="flex-1 overflow-y-auto relative bg-slate-50 p-4 md:p-8" id="itemsScrollContainer">
+                <div id="itemsContainer" class="space-y-4 pb-20"></div>
+                <div id="loadingMore" class="text-center py-4 text-slate-400 hidden font-bold text-sm" data-i18n="loading_more">Loading more items...</div>
+            </div>
+        </div>
+
+        <!-- History Screen -->
+        <div id="historyScreen" class="absolute inset-0 bg-slate-100 z-[80] hidden flex flex-col animate-fade-in">
+            <div class="bg-white border-b border-slate-200 px-4 md:px-8 py-5 flex justify-between items-center shadow-sm shrink-0 flex-wrap gap-4">
+                <h2 class="text-2xl font-bold text-slate-800 flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center text-saipem-blue"><i class="ph-fill ph-archive"></i></div>
+                    <span data-i18n="history">History</span>
+                </h2>
+                <div class="flex gap-4 w-full md:w-auto">
+                     <div class="relative group flex-1">
+                        <i class="ph-bold ph-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                        <input type="text" id="historySearch" onkeyup="App.filterHistory(this.value)" data-i18n-placeholder="history_placeholder" placeholder="Search PO or Date..." class="w-full pl-9 bg-slate-50 border border-slate-200 rounded-lg py-2 text-sm focus:border-saipem-blue outline-none">
+                     </div>
+                    <button onclick="App.closeHistory()" class="text-sm font-bold text-slate-500 hover:text-saipem-blue px-4 py-2 rounded-lg hover:bg-slate-50 transition-all" data-i18n="back">Back</button>
+                </div>
+            </div>
+            <!-- Robust History Container -->
+            <div id="historyListContainer" class="flex-1 overflow-y-auto p-4 md:p-8 space-y-4 w-full max-w-6xl mx-auto"></div>
+        </div>
+    </main>
+
+    <!-- PO Metadata Modal (Interceptor) -->
+    <div id="savePOModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[70] hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md animate-slide-up overflow-hidden m-4">
+            <div class="bg-saipem-blue px-6 py-4 text-white">
+                <h3 class="font-bold text-lg" data-i18n="new_po_import">New PO Import</h3>
+                <p class="text-xs text-blue-200" data-i18n="provide_meta">Please provide metadata for storage.</p>
+            </div>
+            <div class="p-6 space-y-4">
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1" data-i18n="po_ref_meta">PO Reference</label>
+                    <input id="metaPO" class="w-full bg-slate-100 border border-slate-200 p-2.5 rounded-lg text-sm font-bold text-slate-700" readonly>
+                </div>
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1" data-i18n="supplier_meta">Supplier <span class="text-red-500">*</span></label>
+                    <input id="metaSupplier" class="w-full bg-white border border-slate-300 p-2.5 rounded-lg text-sm outline-none focus:border-saipem-blue focus:ring-1 focus:ring-saipem-blue" data-i18n-placeholder="supplier_name_placeholder" placeholder="Supplier Name">
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1" data-i18n="rev_meta">Revision</label>
+                        <input id="metaRev" class="w-full bg-white border border-slate-300 p-2.5 rounded-lg text-sm outline-none" value="0">
+                    </div>
+                     <div>
+                        <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1" data-i18n="subject_meta">Subject</label>
+                        <input id="metaSubject" class="w-full bg-white border border-slate-300 p-2.5 rounded-lg text-sm outline-none" data-i18n-placeholder="description_placeholder" placeholder="Description">
+                    </div>
+                </div>
+            </div>
+            <div class="px-6 py-4 bg-slate-50 border-t border-slate-200 flex justify-end gap-3">
+                <button onclick="App.closeModal('savePOModal')" class="text-slate-500 font-bold text-sm px-4 py-2 hover:bg-slate-200 rounded-lg" data-i18n="cancel">Cancel</button>
+                <button onclick="App.savePO()" class="bg-saipem-blue text-white font-bold text-sm px-6 py-2 rounded-lg hover:bg-saipem-dark shadow-lg" data-i18n="save_load">Save & Load</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Split / Edit Modal -->
+    <div id="splitModal" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40 hidden flex items-center justify-center p-4 transition-opacity duration-200">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden animate-slide-up ring-1 ring-black/5 m-4">
+            <div class="px-4 md:px-8 py-5 bg-white border-b border-slate-100 flex justify-between items-start shrink-0">
+                <div class="pr-6 flex-1">
+                    <div class="flex items-center gap-3 mb-2 flex-wrap">
+                        <span id="modalItemBadge" class="bg-saipem-blue text-white text-[10px] font-extrabold px-2.5 py-1 rounded-full shadow-sm tracking-wide">ITEM 00</span>
+                        <span id="modalCode" class="font-mono text-sm text-slate-600 font-bold bg-slate-100 px-2 py-0.5 rounded border border-slate-200 select-all">CODE</span>
+                        <span id="modalCat" class="text-[10px] uppercase font-bold text-saipem-yellow bg-saipem-blue/90 px-2 py-0.5 rounded ml-2">CATEGORY</span>
+                    </div>
+                    <div class="relative group">
+                        <textarea id="inputDesc" class="w-full bg-transparent border border-transparent hover:border-slate-200 focus:border-saipem-blue focus:bg-slate-50 rounded p-1 -ml-1 text-base font-semibold text-slate-800 leading-snug outline-none resize-none transition-all placeholder:text-slate-300" rows="2" data-i18n-placeholder="mat_desc_placeholder" placeholder="Material Description"></textarea>
+                    </div>
+                </div>
+                <div class="text-right bg-slate-50 px-5 py-3 rounded-xl border border-slate-100 shadow-inner shrink-0 ml-4">
+                    <p class="text-[9px] text-slate-400 uppercase font-extrabold tracking-widest mb-0.5" data-i18n="balance">Balance</p>
+                    <p class="text-2xl font-extrabold text-saipem-blue leading-none tracking-tight" id="modalBalance">0</p>
+                    <p class="text-[10px] text-slate-400 text-right font-bold mt-0.5" id="modalUnit">UN</p>
+                </div>
+            </div>
+
+            <div class="p-4 md:p-8 overflow-y-auto flex-1 bg-white space-y-8">
+                <form id="splitForm" onsubmit="event.preventDefault(); App.checkSplit();" class="space-y-6">
+                    <div class="flex flex-col md:flex-row gap-5">
+                        <div class="w-full md:w-1/3 group">
+                            <label class="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1.5 group-focus-within:text-saipem-blue transition-colors"><span data-i18n="heat_no">Heat Number</span> <span class="text-red-500">*</span></label>
+                            <input type="text" id="inputHeat" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 text-sm font-bold text-slate-700 uppercase focus:border-saipem-blue focus:ring-1 focus:ring-saipem-blue focus:bg-white shadow-sm outline-none transition-all" required data-i18n-placeholder="heat_placeholder" placeholder="Ex: HT-123">
+                        </div>
+                        <div class="w-full md:w-1/3 group">
+                            <label class="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1.5 group-focus-within:text-saipem-blue transition-colors"><span data-i18n="qty_received">Qty Received</span> <span class="text-red-500">*</span></label>
+                            <input type="number" id="inputQty" step="0.001" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 text-lg font-extrabold text-saipem-blue focus:border-saipem-blue focus:ring-1 focus:ring-saipem-blue focus:bg-white shadow-sm outline-none transition-all" required placeholder="0.00">
+                        </div>
+                        <div class="w-full md:w-1/3 group">
+                            <label class="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1.5 group-focus-within:text-saipem-blue transition-colors" data-i18n="invoice">Invoice (NF)</label>
+                            <input type="text" id="inputInv" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 text-sm font-semibold text-slate-700 focus:border-saipem-blue focus:ring-1 focus:ring-saipem-blue focus:bg-white shadow-sm outline-none transition-all" data-i18n-placeholder="invoice_placeholder" placeholder="NF-e 000">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                        <div class="group">
+                            <label class="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1.5 group-focus-within:text-saipem-blue" data-i18n="trace_tag">Traceability Tag</label>
+                            <div class="relative">
+                                <i class="ph-bold ph-tag absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                                <input type="text" id="inputTrace" class="w-full pl-10 bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-sm uppercase font-semibold focus:bg-white focus:border-saipem-blue focus:ring-1 focus:ring-saipem-blue outline-none transition-all" data-i18n-placeholder="trace_placeholder" placeholder="RA-PF-XXX">
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1.5" data-i18n="remarks">Remarks</label>
+                            <input type="text" id="inputRemarks" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-sm focus:bg-white focus:border-saipem-blue focus:ring-1 focus:ring-saipem-blue outline-none transition-all" placeholder="...">
+                        </div>
+                    </div>
+                    <div class="bg-blue-50 rounded-xl p-5 border border-blue-100 relative group transition-all" id="dimContainer">
+                        <div class="flex justify-between items-center mb-4 flex-wrap gap-2">
+                            <h4 class="text-xs font-bold text-saipem-blue uppercase flex items-center gap-2">
+                                <span class="w-6 h-6 rounded bg-white flex items-center justify-center shadow-sm text-saipem-blue"><i class="ph-fill ph-ruler"></i></span>
+                                <span data-i18n="dimensions">Dimensions (mm)</span>
+                            </h4>
+                            <div class="flex items-center gap-3">
+                                <span class="text-[10px] font-bold text-slate-500 uppercase tracking-wider"><span data-i18n="calc_weight">Calc. Weight</span> (kg):</span>
+                                <input type="number" id="inputWeight" class="w-28 bg-white border border-blue-200 rounded-lg px-3 py-1.5 text-right font-bold text-saipem-blue text-sm focus:ring-2 focus:ring-saipem-blue outline-none shadow-sm" placeholder="0.00" step="0.01">
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-4" id="dimGrid"></div>
+                        <div id="eaMessage" class="hidden text-center text-xs text-slate-400 font-medium italic py-2" data-i18n="unit_msg">
+                            Item type Unit/Piece (EA). Dimensions not applicable.
+                        </div>
+                    </div>
+                    <button type="submit" class="w-full bg-saipem-yellow hover:bg-yellow-400 text-saipem-blue font-bold py-4 rounded-xl shadow-lg hover:shadow-xl transition-all active:scale-[0.99] flex items-center justify-center gap-2 text-sm uppercase tracking-wide">
+                        <i class="ph-bold ph-plus-circle text-lg"></i> <span data-i18n="add_batch">Add Batch</span>
+                    </button>
+                </form>
+                <div class="pt-6 border-t border-slate-100">
+                    <h4 class="text-xs font-extrabold text-slate-400 uppercase mb-4 flex items-center gap-2">
+                        <i class="ph-bold ph-list-dashes"></i> <span data-i18n="registered_batches">Registered Batches</span>
+                    </h4>
+                    <div id="modalSplitsList" class="space-y-2.5 max-h-40 overflow-y-auto pr-1"></div>
+                </div>
+            </div>
+            
+            <div class="p-5 bg-slate-50 border-t border-slate-200 text-right shrink-0 flex justify-end">
+                <button onclick="App.closeModal('splitModal')" class="px-8 py-3 bg-white border border-slate-200 text-slate-600 font-bold rounded-xl text-sm hover:bg-slate-100 hover:text-slate-800 transition-colors shadow-sm" data-i18n="finish">
+                    Finish Editing
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Report Config Modal (Optimized) -->
+    <div id="reportConfigModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[55] hidden flex items-center justify-center">
+        <div class="bg-white rounded-none md:rounded-2xl shadow-2xl w-full max-w-4xl h-full md:h-[90vh] flex flex-col overflow-hidden animate-slide-up m-0 md:m-4">
+            <div class="px-6 py-4 md:px-8 md:py-5 bg-saipem-blue text-white flex justify-between items-center shrink-0">
+                <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 rounded bg-white/10 flex items-center justify-center"><i class="ph-bold ph-printer text-lg"></i></div>
+                    <div>
+                        <h3 class="font-bold text-lg leading-tight" data-i18n="print_report">Print Report (MRIR)</h3>
+                        <p class="text-[10px] text-blue-200 uppercase tracking-wider font-medium" data-i18n="report_config_subtitle">Configuration & Print</p>
+                    </div>
+                </div>
+                <button onclick="App.closeModal('reportConfigModal')" class="text-white/60 hover:text-white transition-colors bg-white/10 hover:bg-white/20 rounded p-1"><i class="ph-bold ph-x text-lg"></i></button>
+            </div>
+            
+            <div class="flex-1 overflow-hidden flex flex-col md:flex-row min-h-0 relative">
+                <!-- Left Panel: Inputs -->
+                <div class="w-full md:w-1/3 bg-slate-50 border-b md:border-b-0 md:border-r border-slate-200 flex flex-col max-h-[40%] md:max-h-full shrink-0">
+                    <div class="p-6 overflow-y-auto space-y-5 flex-1">
+                        <h4 class="text-xs font-extrabold text-slate-400 uppercase tracking-wider mb-2" data-i18n="header_info">Header Info</h4>
+                        <div class="space-y-4">
+                            <div><label class="block text-[10px] font-bold text-slate-500 uppercase mb-1" data-i18n="report_no">Report Number</label><input id="rptNo" class="w-full bg-white border border-slate-200 p-2.5 rounded-lg text-sm font-bold text-saipem-blue outline-none" value="RA-SB1-MRR-001"></div>
+                            <div><label class="block text-[10px] font-bold text-slate-500 uppercase mb-1" data-i18n="project">Project</label><input id="rptProject" class="w-full bg-white border border-slate-200 p-2.5 rounded-lg text-sm outline-none" value="263216_BMC-33_RAIA"></div>
+                            <div><label class="block text-[10px] font-bold text-slate-500 uppercase mb-1" data-i18n="supplier">Supplier</label><input id="rptSupplier" class="w-full bg-white border border-slate-200 p-2.5 rounded-lg text-sm outline-none" placeholder="Supplier Name..."></div>
+                            <div class="grid grid-cols-2 gap-3">
+                                <div><label class="block text-[10px] font-bold text-slate-500 uppercase mb-1" data-i18n="location">Location</label><input id="rptLocation" class="w-full bg-white border border-slate-200 p-2.5 rounded-lg text-sm outline-none" value="CTCO_GUARUJÁ"></div>
+                                <div><label class="block text-[10px] font-bold text-slate-500 uppercase mb-1" data-i18n="unloading">Unloading</label><input id="rptUnloading" class="w-full bg-white border border-slate-200 p-2.5 rounded-lg text-sm outline-none" value="AREA 7 - OPEN STORAGE"></div>
+                            </div>
+                            <div class="grid grid-cols-2 gap-3">
+                                <div><label class="block text-[10px] font-bold text-slate-500 uppercase mb-1" data-i18n="regime">Regime Default</label><select id="rptRegime" class="w-full bg-white border border-slate-200 p-2.5 rounded-lg text-sm outline-none"><option>REPETRO</option><option>CONSUMO</option></select></div>
+                                <div><label class="block text-[10px] font-bold text-slate-500 uppercase mb-1" data-i18n="doc_ref">Doc. Ref (No Page)</label><input id="rptDocRef" class="w-full bg-white border border-slate-200 p-2.5 rounded-lg text-sm outline-none" value="176037-A01-PQC-A-FO-0002"></div>
+                            </div>
+                            <div><label class="block text-[10px] font-bold text-slate-500 uppercase mb-1" data-i18n="date">Date</label><input id="rptDate" type="date" class="w-full bg-white border border-slate-200 p-2.5 rounded-lg text-sm outline-none"></div>
+                            <div><label class="block text-[10px] font-bold text-slate-500 uppercase mb-1" data-i18n="general_notes">General Notes</label><textarea id="rptNotes" rows="3" class="w-full bg-white border border-slate-200 p-2.5 rounded-lg text-xs outline-none resize-none" data-i18n-placeholder="notes_placeholder">Material received in good condition properly stored. Visual inspection performed.</textarea></div>
+                        </div>
+
+                        <div class="mt-6 pt-6 border-t border-slate-200">
+                            <h4 class="text-xs font-extrabold text-slate-400 uppercase tracking-wider mb-3 flex justify-between">
+                                <span data-i18n="signatures">Signatures</span>
+                                <span class="text-[9px] text-blue-500 font-normal normal-case" data-i18n="config_in_profile">Configure in User Profile</span>
+                            </h4>
+                            <div class="space-y-4">
+                                <!-- Issued (Read Only / Auto) -->
+                                <div class="opacity-70">
+                                    <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1" data-i18n="issued_by">Issued By (Me)</label>
+                                    <input id="sigIssuedDisp" class="w-full bg-slate-100 border border-slate-200 p-2 rounded text-xs outline-none font-bold text-slate-600" readonly>
+                                </div>
+                                <!-- Verified (Text Only Config) -->
+                                <div>
+                                    <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1" data-i18n="verified_by">Verified By</label>
+                                    <input id="sigVerified" class="w-full bg-white border border-slate-200 p-2 rounded text-xs outline-none font-medium" data-i18n-placeholder="name_placeholder" placeholder="Name">
+                                </div>
+                                <!-- Approved (Text Only Config) -->
+                                <div>
+                                    <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1" data-i18n="approved_by">Approved By</label>
+                                    <input id="sigApproved" class="w-full bg-white border border-slate-200 p-2 rounded text-xs outline-none font-medium" data-i18n-placeholder="name_placeholder" placeholder="Name">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Panel: List -->
+                <div class="flex-1 flex flex-col bg-white h-full md:h-full min-h-0">
+                    <div class="p-6 border-b border-slate-100 flex justify-between items-center bg-white shrink-0">
+                        <h4 class="text-sm font-bold text-slate-800 flex items-center gap-2">
+                            <span class="w-2 h-2 rounded-full bg-green-500"></span>
+                            <span data-i18n="review_items">Review Items</span> (<span id="reviewCount">0</span>)
+                        </h4>
+                        <span class="text-[10px] text-slate-400 bg-slate-50 px-2 py-1 rounded border border-slate-100" data-i18n="check_before">Check before generating</span>
+                    </div>
+                    <div class="flex-1 overflow-y-auto p-0 bg-slate-50" id="reviewListContainer"></div>
+                    <!-- Footer Buttons -->
+                    <div class="p-4 md:p-6 border-t border-slate-100 bg-white flex flex-wrap md:flex-nowrap gap-3 shrink-0">
+                        <button onclick="App.sendEmail()" class="flex-1 bg-white border border-saipem-blue text-saipem-blue hover:bg-blue-50 font-bold py-3.5 rounded-xl shadow-sm transition-all flex items-center justify-center gap-2 text-sm min-w-[100px]">
+                            <i class="ph-bold ph-envelope-simple text-lg"></i> <span data-i18n="email">Email</span>
+                        </button>
+                        <button onclick="App.exportReportExcel()" class="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-3.5 rounded-xl shadow-sm hover:shadow-md transition-all flex items-center justify-center gap-2 text-sm min-w-[120px]">
+                            <i class="ph-bold ph-microsoft-excel-logo text-lg"></i> <span data-i18n="excel">Excel</span>
+                        </button>
+                        <button onclick="App.generateFinalPDF()" class="flex-[2] bg-saipem-blue hover:bg-saipem-dark text-white font-bold py-3.5 rounded-xl shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2 text-sm uppercase tracking-wide min-w-[150px]">
+                            <i class="ph-bold ph-printer text-lg"></i> <span data-i18n="gen_print">Generate & Print</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Surplus / Error Modal -->
+    <div id="surplusModal" class="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-[60] hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-slide-up border-t-4 border-t-red-500 m-4">
+            <div class="p-8 text-center">
+                <div class="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-5 border border-red-100"><i class="ph-fill ph-warning text-3xl text-red-500"></i></div>
+                <h3 class="text-xl font-bold text-slate-800 mb-2" data-i18n="surplus_title">Surplus Detected</h3>
+                <p class="text-sm text-slate-500 mb-6 leading-relaxed" data-i18n="surplus_msg">The quantity entered exceeds the PO balance.</p>
+                <div class="bg-slate-50 rounded-xl p-4 mb-6 text-sm flex justify-between px-6 border border-slate-100">
+                    <div class="text-left"><span class="block text-[10px] text-slate-400 font-bold uppercase tracking-wider" data-i18n="balance">Balance</span><span class="font-bold text-slate-700 text-xl" id="surplusBalance">0</span></div>
+                    <div class="w-px bg-slate-200 mx-2"></div>
+                    <div class="text-right"><span class="block text-[10px] text-slate-400 font-bold uppercase tracking-wider" data-i18n="entered">Entered</span><span class="font-bold text-red-600 text-xl" id="surplusQty">0</span></div>
+                </div>
+                <div class="flex gap-3">
+                    <button onclick="App.cancelSurplus()" class="flex-1 py-3 bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 font-bold rounded-xl text-sm transition-colors" data-i18n="cancel">Cancel</button>
+                    <button onclick="App.confirmSurplus()" class="flex-1 py-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl text-sm transition-colors shadow-lg shadow-red-200/50" data-i18n="confirm">Confirm</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Generic Modal -->
+    <div id="genericModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[65] hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden animate-slide-up m-4 max-h-[90vh] flex flex-col">
+            <div class="px-5 py-3 border-b border-slate-100 bg-slate-50 flex justify-between items-center shrink-0">
+                <h3 id="genericTitle" class="font-bold text-slate-800">Title</h3>
+                <button onclick="App.closeModal('genericModal')" class="text-slate-400 hover:text-red-500 transition-colors"><i class="ph-bold ph-x text-lg"></i></button>
+            </div>
+            <div id="genericBody" class="p-5 overflow-y-auto"></div>
+        </div>
+    </div>
+
+<script type="module">
+        // --- TRANSLATION DICTIONARY ---
+        const TRANSLATIONS = {
+            en: {
+                processing: "Processing...",
+                undo: "Undo",
+                history: "History",
+                back: "Back",
+                import_title: "Import PO Data",
+                import_msg: "Upload Packing List or PO to start.",
+                click_to_upload: "Click to upload Excel/CSV",
+                or: "OR",
+                manual_entry: "Manual Entry / Free Issue",
+                saved_pos: "Saved Purchase Orders",
+                po_ref: "PO Reference",
+                dash_stats_format: "{rec} / {total} Items",
+                new_item: "New Item",
+                reset: "Close PO",
+                print_report: "Print Report",
+                loading_more: "Loading more items...",
+                balance: "Balance",
+                heat_no: "Heat Number",
+                qty_received: "Qty Received",
+                invoice: "Invoice (NF)",
+                trace_tag: "Traceability Tag",
+                remarks: "Remarks",
+                dimensions: "Dimensions (mm)",
+                calc_weight: "Calc. Weight",
+                unit_msg: "Item type Unit/Piece (EA). Dimensions not applicable.",
+                add_batch: "Add Batch",
+                registered_batches: "Registered Batches",
+                finish: "Finish Editing",
+                report_config_subtitle: "Configuration & Print",
+                header_info: "Header Info",
+                report_no: "Report Number",
+                project: "Project",
+                supplier: "Supplier",
+                location: "Location",
+                unloading: "Unloading",
+                regime: "Regime Default",
+                doc_ref: "Doc. Ref (No Page)",
+                date: "Date",
+                general_notes: "General Notes",
+                signatures: "Signatures",
+                config_in_profile: "Configure in User Profile",
+                issued_by: "Issued By (Me)",
+                verified_by: "Verified By",
+                approved_by: "Approved By",
+                review_items: "Review Items",
+                check_before: "Check before generating",
+                email: "Email",
+                excel: "Excel",
+                gen_print: "Generate & Print",
+                surplus_title: "Surplus Detected",
+                surplus_msg: "The quantity entered exceeds the PO balance.",
+                entered: "Entered",
+                cancel: "Cancel",
+                confirm: "Confirm",
+                filter_placeholder: "Filter by code...",
+                history_placeholder: "Search PO or Report No...",
+                user_settings: "User Profile",
+                db_management: "Database Management",
+                export_json: "Export Backup (JSON)",
+                import_json: "Import Backup (JSON)",
+                reset_all: "Reset All Data",
+                save_profile: "Save Profile",
+                status_manual: "Manual",
+                status_surplus: "Surplus",
+                status_done: "Done",
+                msg_error: "Error",
+                msg_success: "Success",
+                msg_session_restored: "Session Restored",
+                msg_invalid_json: "Invalid JSON.",
+                pdf_title: "MATERIAL RECEIVING REPORT",
+                pdf_page: "Page",
+                new_po_import: "New PO Import",
+                provide_meta: "Please provide metadata for storage.",
+                po_ref_meta: "PO Reference",
+                supplier_meta: "Supplier",
+                rev_meta: "Revision",
+                subject_meta: "Subject",
+                save_load: "Save & Load",
+                supplier_name_placeholder: "Supplier Name",
+                description_placeholder: "Description",
+                mat_desc_placeholder: "Material Description",
+                heat_placeholder: "Ex: HT-123",
+                invoice_placeholder: "NF-e 000",
+                trace_placeholder: "RA-PF-XXX",
+                notes_placeholder: "Material received in good condition...",
+                name_placeholder: "Name",
+                user_generic: "User",
+                role_generic: "Role",
+                loading_pos: "Loading saved POs...",
+                no_pos_found: "No saved POs found.",
+                error_loading_pos: "Error loading POs.",
+                delete_po_confirm: "Delete this PO permanently?",
+                load_po_confirm: "Current session will be lost. Load this PO?",
+                po_loaded_sync: "PO Loaded & Synced",
+                po_loaded_msg: "{poRef} loaded. Quantities synced with History.",
+                file_empty_error: "Empty File.",
+                qty_col_error: "Quantity (Qty) column not found.",
+                po_exists_confirm: "PO {po} already exists (Rev {rev}).\nDo you want to treat this as a new Revision and merge data?",
+                merged_toast_title: "Merged",
+                merged_toast_msg: "Revision {newRev} created. {updated} updated, {added} added.",
+                supplier_required: "Supplier is required.",
+                img_load_fail: "Failed to load image.",
+                no_items_found: "No items found.",
+                close_session_confirm: "Close current PO Session?",
+                invalid_split_data: "Invalid Qty/Heat",
+                surplus_confirm: "Duplicating this batch will exceed the PO balance. Continue anyway?",
+                batch_to_form: "Batch moved to form.",
+                batch_duplicated: "Batch duplicated.",
+                batch_removed: "Batch {heat} removed.",
+                free_issue_placeholder_po: "PO Number (Manual)",
+                free_issue_placeholder_item: "Item No",
+                free_issue_placeholder_code: "Material Code",
+                free_issue_placeholder_desc: "Detailed Description",
+                free_issue_error: "Please fill in Code and Description.",
+                free_issue_created: "Item {code} created.",
+                save_and_new: "Save & New",
+                create_item: "Create Item",
+                no_received_items: "No received items to generate a report.",
+                excel_exported: "Excel exported successfully.",
+                no_export_items: "No items to export.",
+                popup_alert: "Please allow popups for this site to print reports.",
+                report_generated: "Report generated and saved to history.",
+                reprint_success: "History reprinted successfully.",
+                report_deleted: "Report deleted from history.",
+                delete_history_confirm: "Are you sure you want to delete this report from history?",
+                load_history_confirm: "Loading history will replace current session. Continue?",
+                history_loaded: "History Loaded",
+                history_loaded_msg: "Session restored for editing.",
+                record_not_found: "Record not found.",
+                my_name: "My Name",
+                my_role: "My Role",
+                my_sig: "My Signature (Issued By)",
+                no_img: "No Img",
+                upload_img: "Upload Image",
+                sig_tooltip: "This image will automatically appear on all reports you generate.",
+                default_team: "Default Team (Optional)",
+                def_verified: "Verified By (Default)",
+                def_approved: "Approved By (Default)",
+                profile_updated: "Profile updated.",
+                nuke_confirm: "WARNING: This will permanently delete ALL application data (POs, History, Profiles). This action cannot be undone. Are you sure you want to proceed?",
+                import_confirm: "This will overwrite all current data. Are you sure you want to import this backup?",
+                import_success: "Backup imported successfully. The application will now reload.",
+                import_error: "Failed to import backup. Invalid file format.",
+                loading_history: "Loading...",
+                no_history: "No history found.",
+                reports_count: "{count} Reports",
+                load_edit_btn: "Load & Edit",
+            },
+            pt: {
+                processing: "Processando...",
+                undo: "Desfazer",
+                history: "Histórico",
+                back: "Voltar",
+                import_title: "Importar Dados PO",
+                import_msg: "Carregue Packing List ou PO para começar.",
+                click_to_upload: "Clique para carregar Excel/CSV",
+                or: "OU",
+                manual_entry: "Entrada Manual / Free Issue",
+                saved_pos: "Ordens de Compra Salvas",
+                po_ref: "Referência PO",
+                dash_stats_format: "{rec} / {total} Itens",
+                new_item: "Novo Item",
+                reset: "Fechar PO",
+                print_report: "Imprimir Relatório",
+                loading_more: "Carregando mais itens...",
+                balance: "Saldo",
+                heat_no: "Corrida/Heat",
+                qty_received: "Qtd Recebida",
+                invoice: "Nota Fiscal (NF)",
+                trace_tag: "Tag Rastreabilidade",
+                remarks: "Observações",
+                dimensions: "Dimensões (mm)",
+                calc_weight: "Peso Calc.",
+                unit_msg: "Item tipo Unidade/Peça (EA). Dimensões não aplicáveis.",
+                add_batch: "Adicionar Lote",
+                registered_batches: "Lotes Registrados",
+                finish: "Concluir Edição",
+                report_config_subtitle: "Configuração e Impressão",
+                header_info: "Informações do Cabeçalho",
+                report_no: "Número do Relatório",
+                project: "Projeto",
+                supplier: "Fornecedor",
+                location: "Local",
+                unloading: "Ponto de Descarga",
+                regime: "Regime Padrão",
+                doc_ref: "Doc. Ref (S/ Página)",
+                date: "Data",
+                general_notes: "Notas Gerais",
+                signatures: "Assinaturas",
+                config_in_profile: "Configurar no Perfil",
+                issued_by: "Emitido Por (Eu)",
+                verified_by: "Verificado Por",
+                approved_by: "Aprovado Por",
+                review_items: "Revisar Itens",
+                check_before: "Verifique antes de gerar",
+                email: "E-mail",
+                excel: "Excel",
+                gen_print: "Gerar & Imprimir",
+                surplus_title: "Excedente Detectado",
+                surplus_msg: "A quantidade informada supera o saldo da PO.",
+                entered: "Informado",
+                cancel: "Cancelar",
+                confirm: "Confirmar",
+                filter_placeholder: "Filtrar por código...",
+                history_placeholder: "Buscar PO ou N° Relatório...",
+                user_settings: "Perfil de Usuário",
+                db_management: "Gerenciamento de Dados",
+                export_json: "Exportar Backup (JSON)",
+                import_json: "Importar Backup (JSON)",
+                reset_all: "Resetar Tudo",
+                save_profile: "Salvar Perfil",
+                status_manual: "Manual",
+                status_surplus: "Excedente",
+                status_done: "Concluído",
+                msg_error: "Erro",
+                msg_success: "Sucesso",
+                msg_session_restored: "Sessão Restaurada",
+                msg_invalid_json: "JSON Inválido.",
+                pdf_title: "RELATÓRIO DE RECEBIMENTO DE MATERIAIS",
+                pdf_page: "Página",
+                new_po_import: "Nova Importação de PO",
+                provide_meta: "Forneça os metadados para armazenamento.",
+                po_ref_meta: "Referência PO",
+                supplier_meta: "Fornecedor",
+                rev_meta: "Revisão",
+                subject_meta: "Assunto",
+                save_load: "Salvar & Carregar",
+                supplier_name_placeholder: "Nome do Fornecedor",
+                description_placeholder: "Descrição",
+                mat_desc_placeholder: "Descrição do Material",
+                heat_placeholder: "Ex: HT-123",
+                invoice_placeholder: "NF-e 000",
+                trace_placeholder: "RA-PF-XXX",
+                notes_placeholder: "Material recebido em boas condições...",
+                name_placeholder: "Nome",
+                user_generic: "Usuário",
+                role_generic: "Função",
+                loading_pos: "Carregando POs salvas...",
+                no_pos_found: "Nenhuma PO salva encontrada.",
+                error_loading_pos: "Erro ao carregar POs.",
+                delete_po_confirm: "Deletar esta PO permanentemente?",
+                load_po_confirm: "A sessão atual será perdida. Carregar esta PO?",
+                po_loaded_sync: "PO Carregada e Sincronizada",
+                po_loaded_msg: "PO {poRef} carregada. Quantidades sincronizadas com Histórico.",
+                file_empty_error: "Arquivo Vazio.",
+                qty_col_error: "Coluna de Quantidade (Qty) não encontrada.",
+                po_exists_confirm: "PO {po} já existe (Rev {rev}).\nDeseja tratar como uma nova Revisão e mesclar os dados?",
+                merged_toast_title: "Mesclado",
+                merged_toast_msg: "Revisão {newRev} criada. {updated} atualizados, {added} adicionados.",
+                supplier_required: "Fornecedor é obrigatório.",
+                img_load_fail: "Falha ao carregar imagem.",
+                no_items_found: "Nenhum item encontrado.",
+                close_session_confirm: "Fechar a sessão da PO atual?",
+                invalid_split_data: "Qtd/Heat inválido.",
+                surplus_confirm: "Duplicar este lote excederá o saldo da PO. Continuar mesmo assim?",
+                batch_to_form: "Lote movido para o formulário.",
+                batch_duplicated: "Lote duplicado.",
+                batch_removed: "Lote {heat} removido.",
+                free_issue_placeholder_po: "Número da PO (Manual)",
+                free_issue_placeholder_item: "Nº do Item",
+                free_issue_placeholder_code: "Código do Material",
+                free_issue_placeholder_desc: "Descrição Detalhada",
+                free_issue_error: "Preencha Código e Descrição.",
+                free_issue_created: "Item {code} criado.",
+                save_and_new: "Salvar & Novo",
+                create_item: "Criar Item",
+                no_received_items: "Nenhum item recebido para gerar relatório.",
+                excel_exported: "Excel exportado com sucesso.",
+                no_export_items: "Nenhum item para exportar.",
+                popup_alert: "Por favor, permita pop-ups para este site para imprimir.",
+                report_generated: "Relatório gerado e salvo no histórico.",
+                reprint_success: "Reimpressão do histórico bem-sucedida.",
+                report_deleted: "Relatório deletado do histórico.",
+                delete_history_confirm: "Tem certeza que deseja deletar este relatório do histórico?",
+                load_history_confirm: "Carregar histórico substituirá a sessão atual. Continuar?",
+                history_loaded: "Histórico Carregado",
+                history_loaded_msg: "Sessão restaurada para edição.",
+                record_not_found: "Registro não encontrado.",
+                my_name: "Meu Nome",
+                my_role: "Minha Função",
+                my_sig: "Minha Assinatura (Emitido Por)",
+                no_img: "Sem Img",
+                upload_img: "Carregar Imagem",
+                sig_tooltip: "Esta imagem aparecerá automaticamente em todos os relatórios que você gerar.",
+                default_team: "Equipe Padrão (Opcional)",
+                def_verified: "Verificado Por (Padrão)",
+                def_approved: "Aprovado Por (Padrão)",
+                profile_updated: "Perfil atualizado.",
+                nuke_confirm: "AVISO: Isto irá apagar permanentemente TODOS os dados da aplicação (POs, Histórico, Perfis). Esta ação não pode ser desfeita. Tem certeza que deseja prosseguir?",
+                import_confirm: "Isto irá sobrescrever todos os dados atuais. Tem certeza que quer importar este backup?",
+                import_success: "Backup importado com sucesso. A aplicação será recarregada.",
+                import_error: "Falha ao importar backup. Formato de arquivo inválido.",
+                loading_history: "Carregando...",
+                no_history: "Nenhum histórico encontrado.",
+                reports_count: "{count} Relatórios",
+                load_edit_btn: "Carregar e Editar",
+            }
+        };
+
+        const Utils = {
+            esc: (str) => {
+                if(!str) return '';
+                return String(str).replace(/[&<>"']/g, function(m) {
+                    const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
+                    return map[m];
+                });
+            },
+            debounce: (func, wait) => {
+                let timeout;
+                return function(...args) {
+                    const context = this;
+                    clearTimeout(timeout);
+                    timeout = setTimeout(() => func.apply(context, args), wait);
+                };
+            },
+            parseNum: (str) => {
+                if(typeof str === 'number') return str;
+                if(!str) return 0;
+                let s = String(str).trim();
+                // Logic to detect BR format (1.000,00) vs US (1,000.00)
+                if(s.lastIndexOf(',') > s.lastIndexOf('.')) {
+                    s = s.replace(/\./g, '').replace(',', '.');
+                } else {
+                    s = s.replace(/,/g, '');
+                }
+                const n = parseFloat(s);
+                return isNaN(n) ? 0 : n;
+            },
+            fileToBase64: (file) => new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.readAsDataURL(file);
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = error => reject(error);
+            })
+        };
+
+        const Dimensions = {
+            TYPES: { PIPE: 'PIPE', PLATE: 'PLATE', BAR: 'BAR', BEAM: 'BEAM', PIECE: 'EA' },
+            
+            detectCategory(desc, unit) {
+                const d = String(desc||'').toLowerCase();
+                const u = String(unit||'').toLowerCase();
+                if (u.includes('m2')) return this.TYPES.PLATE;
+                if (u.includes('ea') || u.includes('un') || u.includes('pç') || u.includes('set') || u.includes('kt')) return this.TYPES.PIECE;
+                
+                if (d.includes('pipe') || d.includes('tube') || d.includes('tubo')) return this.TYPES.PIPE;
+                if (d.includes('plate') || d.includes('strip') || d.includes('chapa') || d.includes('sheet')) return this.TYPES.PLATE;
+                if (d.includes('bar') || d.includes('round') || d.includes('barra')) return this.TYPES.BAR;
+                if (d.includes('beam') || d.includes('profile') || d.includes('heb') || d.includes('ipe') || d.includes('viga') || d.includes('perfil')) return this.TYPES.BEAM;
+                
+                return this.TYPES.PIECE; 
+            },
+
+            getFields(cat) {
+                switch(cat) {
+                    case this.TYPES.PIPE: return { l:true, d:true, t:true };
+                    case this.TYPES.PLATE: return { l:true, w:true, t:true };
+                    case this.TYPES.BAR: return { l:true, d:true };
+                    case this.TYPES.BEAM: return { l:true, linear:true }; 
+                    default: return {}; 
+                }
+            }
+        };
+
+        class Toast {
+    static timer = null;
+
+    static show(type, title, msg, actionCb = null) {
+        const el = document.getElementById('toast');
+        const iconEl = document.getElementById('toastIcon');
+        const tTitle = document.getElementById('toastTitle');
+        const tMsg = document.getElementById('toastMsg');
+        const btn = document.getElementById('toastAction');
+
+        // Configuração de Estilos baseada no Tipo
+        let borderClass = 'border-saipem-blue';
+        let iconHtml = `<i class="ph-fill ph-info text-saipem-blue"></i>`;
+
+        // Remove cores antigas para garantir
+        el.classList.remove('border-green-500', 'border-red-500', 'border-saipem-blue');
+
+        if(type === 'success') {
+            borderClass = 'border-green-500';
+            iconHtml = `<i class="ph-fill ph-check-circle text-green-500"></i>`;
+        } else if(type === 'error') {
+            borderClass = 'border-red-500';
+            iconHtml = `<i class="ph-fill ph-warning-circle text-red-500"></i>`;
+        } else {
+            borderClass = 'border-saipem-blue'; // Info/Default
+        }
+
+        // Atualiza conteúdo
+        el.classList.add(borderClass);
+        iconEl.innerHTML = iconHtml;
+        tTitle.innerText = title;
+        tMsg.innerText = msg;
+
+        // Configura botão de ação (Undo)
+        if(actionCb) {
+            btn.classList.remove('hidden');
+            btn.onclick = () => { 
+                actionCb(); 
+                this.hide(); // Fecha ao clicar
+            };
+        } else {
+            btn.classList.add('hidden');
+            btn.onclick = null;
+        }
+
+        // MOSTRAR O TOAST
+        // 1. Remove as classes que escondem
+        el.classList.remove('translate-x-full', 'opacity-0', 'pointer-events-none');
+        // 2. Adiciona as classes que mostram (opcional, pois o padrão sem as de cima já é visível, mas bom para garantir)
+        el.classList.add('translate-x-0', 'opacity-100', 'pointer-events-auto');
+
+        // Reinicia o timer para esconder automaticamente
+        if(this.timer) clearTimeout(this.timer);
+        const time = actionCb ? 6000 : 3000; // Se tem ação, espera mais tempo
+        
+        this.timer = setTimeout(() => {
+            this.hide();
+        }, time);
+    }
+
+    static hide() {
+        const el = document.getElementById('toast');
+        // ESCONDER O TOAST
+        // 1. Remove visibilidade
+        el.classList.remove('translate-x-0', 'opacity-100', 'pointer-events-auto');
+        // 2. Adiciona classes de ocultamento e desativa cliques
+        el.classList.add('translate-x-full', 'opacity-0', 'pointer-events-none');
+    }
+}
+
+        class DB {
+            constructor() { this.name='MRIR_SYS_V8_ELITE'; this.v=2; this.db=null; }
+            async init() {
+                return new Promise((res, rej) => {
+                    const req = indexedDB.open(this.name, this.v);
+                    req.onupgradeneeded = e => {
+                        const db = e.target.result;
+                        if(!db.objectStoreNames.contains('cfg')) db.createObjectStore('cfg', {keyPath:'k'});
+                        if(!db.objectStoreNames.contains('rec')) db.createObjectStore('rec', {keyPath:'id', autoIncrement:true});
+                        if(!db.objectStoreNames.contains('session')) db.createObjectStore('session', {keyPath:'k'});
+                        // v2: Persistent PO Storage
+                        if(!db.objectStoreNames.contains('saved_pos')) db.createObjectStore('saved_pos', {keyPath:'id', autoIncrement:true});
+                    };
+                    req.onsuccess = e => { this.db = e.target.result; res(this.db); };
+                    req.onerror = () => rej("DB Error");
+                });
+            }
+            async op(mode, store, act, arg) {
+                return new Promise((res, rej) => {
+                    if(!this.db) return rej("DB Off");
+                    try {
+                        const tx = this.db.transaction(store, mode);
+                        const s = tx.objectStore(store);
+                        const r = act==='getAll' ? s.getAll() : s[act](arg);
+                        r.onsuccess = () => res(r.result);
+                        r.onerror = () => rej(r.error);
+                    } catch(e) { rej(e); }
+                });
+            }
+        }
+
+        class Core {
+            constructor() {
+                this.db = new DB();
+                this.defaults = { items: [], view: [], po: 'N/A', hist: {}, currId: null, pendingSplit: null, meta: {} };
+                this.data = { user: { name:'Operator', role:'Logistics', k:'user' }, lang: 'en', ...this.defaults };
+                this.chunkSize = 50;
+                this.currentChunk = 0;
+                this.stagingData = null; // Temp holder for parsed file data before save
+            }
+            async start() {
+                await this.db.init();
+                const u = await this.db.op('readonly','cfg','get','user');
+                if(u) this.data.user = u;
+                
+                // Load language preference
+                const l = await this.db.op('readonly','cfg','get','lang');
+                if(l) this.data.lang = l.v;
+
+                await this.loadSession(); 
+            }
+            
+            async saveSession() {
+                if(!this.data.items.length && this.data.po === 'N/A') {
+                    await this.db.op('readwrite', 'session', 'delete', 'current');
+                    return;
+                }
+                const sessionData = { 
+                    k: 'current', 
+                    items: this.data.items, 
+                    po: this.data.po, 
+                    meta: this.data.meta, 
+                    ts: Date.now() 
+                };
+                await this.db.op('readwrite', 'session', 'put', sessionData);
+            }
+
+            async loadSession() {
+                try {
+                    const sess = await this.db.op('readonly', 'session', 'get', 'current');
+                    if(sess && sess.items.length) {
+                        this.data.items = sess.items;
+                        this.data.po = sess.po;
+                        this.data.meta = sess.meta || {};
+                        this.data.view = [...this.data.items];
+                        return true;
+                    }
+                } catch(e) { console.log('No previous session'); }
+                return false;
+            }
+
+            parse(json, filename) {
+                if(!json || !json.length) throw new Error(App.t('file_empty_error'));
+                const headers = Object.keys(json[0]);
+                const clean = s => s.toString().toLowerCase().replace(/[^a-z0-9]/g, '');
+                
+                const findCol = (possibles) => {
+                    for(const p of possibles) {
+                        const target = clean(p);
+                        const match = headers.find(h => clean(h) === target);
+                        if(match) return match;
+                    }
+                    return headers.find(h => possibles.some(p => clean(h).includes(clean(p))));
+                };
+                
+                const map = {
+                    item: findCol(['PO Item', 'Item No', 'Line Item']), 
+                    code: findCol(['Ident Code', 'Material No', 'Part Number', 'Codigo']), 
+                    desc: findCol(['PO item descr', 'PO item descr.', 'Description', 'Short Text', 'Descr', 'Item Desc']), 
+                    qty: findCol(['Qty', 'Quantity', 'Quantidade', 'Qtd']), 
+                    unit: findCol(['UM', 'U.M.', 'Unit', 'UOM', 'Unid', 'BUn', 'OUn']), 
+                    po: findCol(['PO number', 'Purchase Order', 'Pedido']) 
+                };
+
+                if(map.unit && map.po && map.unit === map.po) {
+                    map.unit = null;
+                }
+
+                if(!map.qty) throw new Error(App.t('qty_col_error'));
+                
+                let poRef = 'MANUAL_ENTRY';
+                if(map.po && json[0][map.po]) {
+                    poRef = String(json[0][map.po]);
+                } else if(filename) {
+                    poRef = filename.replace(/\.[^/.]+$/, "").toUpperCase();
+                }
+                
+                const items = json.map((row, idx) => {
+                    let q = Utils.parseNum(row[map.qty]);
+                    let u = map.unit ? (row[map.unit] || 'UN') : 'UN';
+                    const uLow = String(u).toLowerCase();
+                    if(['m','meter','mts'].includes(uLow)) { q *= 1000; u = 'mm'; }
+                    
+                    const code = map.code ? String(row[map.code]) : `NC-${idx}`;
+                    const itemNo = map.item ? String(row[map.item]) : (idx+1);
+                    const cat = Dimensions.detectCategory(String(row[map.desc]||''), String(u));
+
+                    return { 
+                        id: idx, po: poRef, itemNo: String(itemNo), 
+                        code: String(code), desc: String(row[map.desc]||'---'), 
+                        qtyOrig: q, unit: u, balance: q, 
+                        received: 0, splits: [], free: false, over: false,
+                        cat: cat
+                    };
+                });
+                
+                return { 
+                    po: poRef, 
+                    items: items.filter(i => i.qtyOrig > 0 || i.desc !== '---') 
+                };
+            }
+            getCurrItem() { return this.data.items.find(i => i.id === this.data.currId); }
+        }
+
+        const core = new Core();
+        
+        window.toggleGroup = function(header) {
+            const container = header.nextElementSibling;
+            if (container) {
+                container.classList.toggle('hidden');
+                header.classList.toggle('bg-blue-50');
+            }
+        };
+
+        window.App = {
+            async init() { 
+                await core.start(); 
+                this.applyLanguage();
+                this.renderHeader(); 
+                this.renderSavedPOs();
+                document.getElementById('rptDate').valueAsDate = new Date();
+                
+                if(core.data.items.length > 0) {
+                    this.toScreen('listScreen');
+                    this.renderListChunk(true);
+                    Toast.show('info', this.t('msg_session_restored'), '');
+                }
+
+                const container = document.getElementById('itemsScrollContainer');
+                container.addEventListener('scroll', () => {
+                    if (container.scrollTop + container.clientHeight >= container.scrollHeight - 100) {
+                        this.renderListChunk();
+                    }
+                });
+            },
+
+            t(key, params = {}) {
+                const l = core.data.lang || 'en';
+                let str = TRANSLATIONS[l][key] || key;
+                for (const p in params) {
+                    str = str.replace(`{${p}}`, params[p]);
+                }
+                return str;
+            },
+
+            async toggleLanguage() {
+                const newLang = core.data.lang === 'en' ? 'pt' : 'en';
+                core.data.lang = newLang;
+                await core.db.op('readwrite','cfg','put', { k:'lang', v:newLang });
+                this.applyLanguage();
+                if(!document.getElementById('listScreen').classList.contains('hidden')) {
+                     this.renderListChunk(true);
+                }
+                this.renderSavedPOs();
+                this.renderHeader();
+            },
+
+            applyLanguage() {
+                const l = core.data.lang;
+                document.getElementById('currentLangDisplay').innerText = l.toUpperCase();
+                document.documentElement.lang = l;
+                document.querySelectorAll('[data-i18n]').forEach(el => {
+                    const k = el.getAttribute('data-i18n');
+                    if(TRANSLATIONS[l][k]) el.innerText = TRANSLATIONS[l][k];
+                });
+                document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+                    const k = el.getAttribute('data-i18n-placeholder');
+                    if(TRANSLATIONS[l][k]) el.placeholder = TRANSLATIONS[l][k];
+                });
+            },
+
+            async renderSavedPOs() {
+                const c = document.getElementById('savedPOsContainer');
+                c.innerHTML = `<div class="text-xs text-slate-400 text-center py-4">${this.t('loading_pos')}</div>`;
+                
+                try {
+                    const pos = await core.db.op('readonly', 'saved_pos', 'getAll');
+                    const allHistory = await core.db.op('readonly', 'rec', 'getAll');
+                    
+                    c.innerHTML = '';
+                    if(!pos || !pos.length) {
+                        c.innerHTML = `<div class="text-xs text-slate-400 text-center py-4 border-2 border-dashed border-slate-200 rounded-lg">${this.t('no_pos_found')}</div>`;
+                        return;
+                    }
+                    
+                    pos.sort((a,b) => b.id - a.id).forEach(p => {
+                        let itemsWithReception = 0;
+                        const poHistoryMap = {};
+                        allHistory.filter(h => h.poNumber === p.poRef).forEach(h => {
+                            h.snapshotItems.forEach(si => {
+                                const total = si.splits.reduce((acc,s) => acc + (parseFloat(s.qty)||0), 0);
+                                if(total > 0) poHistoryMap[si.code] = (poHistoryMap[si.code]||0) + total;
+                            });
+                        });
+
+                        p.items.forEach(item => {
+                            const histQty = poHistoryMap[item.code] || 0;
+                            const actualReceived = Math.max(item.received, histQty);
+                            if (actualReceived > 0) itemsWithReception++;
+                        });
+
+                        const pct = p.items.length ? Math.round((itemsWithReception / p.items.length) * 100) : 0;
+
+                        const div = document.createElement('div');
+                        div.className = "bg-white p-4 rounded-xl shadow-sm border border-slate-200 hover:shadow-md hover:border-saipem-blue cursor-pointer transition-all group relative";
+                        div.onclick = () => this.loadSavedPO(p.id);
+                        
+                        div.innerHTML = `
+                            <div class="flex justify-between items-start mb-2">
+                                <h4 class="font-bold text-saipem-blue text-sm">${p.poRef}</h4>
+                                <span class="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded">${this.t('rev_meta')} ${p.rev}</span>
+                            </div>
+                            <div class="flex justify-end mb-1">
+                                <span class="text-[10px] font-bold text-saipem-blue">${pct}%</span>
+                            </div>
+                            <div class="w-full bg-slate-100 rounded-full h-1.5 mb-2 overflow-hidden">
+                                <div class="bg-saipem-yellow h-full rounded-full" style="width: ${pct}%"></div>
+                            </div>
+                            <p class="text-xs text-slate-600 font-bold mb-1">${p.supplier}</p>
+                            <p class="text-[10px] text-slate-400 mb-2 truncate">${p.subject || '---'}</p>
+                            <div class="flex justify-between items-center text-[10px] text-slate-400 border-t border-slate-100 pt-2 mt-2">
+                                <span>${this.t('dash_stats_format', {rec: p.items.length, total: ''}).replace(' / ','')}</span>
+                                <span>${new Date(p.date).toLocaleDateString()}</span>
+                            </div>
+                            <button onclick="event.stopPropagation(); App.deleteSavedPO(${p.id})" class="absolute top-2 right-2 p-1.5 bg-white rounded-full shadow-sm text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"><i class="ph-bold ph-trash"></i></button>
+                        `;
+                        c.appendChild(div);
+                    });
+                } catch(e) {
+                     c.innerHTML = `<div class="text-xs text-red-400 text-center">${this.t('error_loading_pos')}</div>`;
+                }
+            },
+
+            async deleteSavedPO(id) {
+                if(!confirm(this.t('delete_po_confirm'))) return;
+                await core.db.op('readwrite', 'saved_pos', 'delete', id);
+                this.renderSavedPOs();
+            },
+
+            async loadSavedPO(id) {
+                if(core.data.items.length > 0 && !confirm(this.t('load_po_confirm'))) return;
+                
+                this.setLoading(true);
+                const po = await core.db.op('readonly', 'saved_pos', 'get', id);
+                
+                if(po) {
+                    const allHistory = await core.db.op('readonly', 'rec', 'getAll');
+                    const relevantHistory = allHistory.filter(h => h.poNumber === po.poRef);
+                    
+                    const receivedMap = {}; 
+                    relevantHistory.forEach(report => {
+                        report.snapshotItems.forEach(histItem => {
+                            if(histItem.splits && histItem.splits.length > 0) {
+                                const qtyInReport = histItem.splits.reduce((sum, s) => sum + (parseFloat(s.qty)||0), 0);
+                                if(qtyInReport > 0) {
+                                    receivedMap[histItem.code] = (receivedMap[histItem.code] || 0) + qtyInReport;
+                                }
+                            }
+                        });
+                    });
+
+                    po.items.forEach(item => {
+                        const totalHistQty = receivedMap[item.code] || 0;
+                        if(totalHistQty > 0) {
+                             item.received = totalHistQty;
+                             item.balance = item.qtyOrig - item.received;
+                             if(item.balance < 0) item.over = true;
+                        }
+                    });
+
+                    core.data.items = po.items;
+                    core.data.po = po.poRef;
+                    core.data.meta = { supplier: po.supplier, rev: po.rev, subject: po.subject };
+                    core.data.view = [...core.data.items];
+                    
+                    await core.saveSession();
+                    this.toScreen('listScreen');
+                    this.renderListChunk(true);
+                    Toast.show('success', this.t('po_loaded_sync'), this.t('po_loaded_msg', {poRef: po.poRef}));
+                }
+                this.setLoading(false);
+            },
+            
+            async handleFile(input) {
+                const f = input.files[0];
+                if(!f) return;
+                this.setLoading(true);
+                const r = new FileReader();
+                r.onload = async e => {
+                    try {
+                        const data = new Uint8Array(e.target.result);
+                        const wb = XLSX.read(data, {type:'array'});
+                        const sheet = wb.Sheets[wb.SheetNames[0]];
+                        const range = XLSX.utils.decode_range(sheet['!ref']);
+                        let headerRowIndex = 0;
+                        for(let R = range.s.r; R <= Math.min(range.e.r, 20); ++R) {
+                            const row = [];
+                            for(let C = range.s.c; C <= range.e.c; ++C) {
+                                const cell = sheet[XLSX.utils.encode_cell({r:R, c:C})];
+                                if(cell && cell.v) row.push(String(cell.v).toLowerCase());
+                            }
+                            const strRow = row.join(' ');
+                            if(strRow.includes('po number') || strRow.includes('ident code')) {
+                                headerRowIndex = R; break;
+                            }
+                        }
+                        const json = XLSX.utils.sheet_to_json(sheet, {defval:"", range: headerRowIndex});
+                        
+                        const parsed = core.parse(json, f.name);
+                        
+                        const allPos = await core.db.op('readonly', 'saved_pos', 'getAll');
+                        const existingPO = allPos.find(p => p.poRef === parsed.po);
+
+                        if(existingPO) {
+                            if(confirm(this.t('po_exists_confirm', {po: parsed.po, rev: existingPO.rev}))) {
+                                await this.mergeAndLoad(existingPO, parsed);
+                                this.setLoading(false);
+                                input.value = '';
+                                return;
+                            }
+                        }
+
+                        core.stagingData = parsed;
+                        document.getElementById('metaPO').value = parsed.po;
+                        document.getElementById('metaSupplier').value = '';
+                        document.getElementById('savePOModal').classList.remove('hidden');
+                        
+                    } catch(err) { alert(err.message); } finally { this.setLoading(false); input.value = ''; }
+                };
+                r.readAsArrayBuffer(f);
+            },
+
+            async mergeAndLoad(existingPO, newParsed) {
+                let newItemsCount = 0;
+                let updatedItemsCount = 0;
+                
+                const existingMap = new Map();
+                existingPO.items.forEach(i => existingMap.set(i.code, i));
+
+                const mergedItems = newParsed.items.map(newItem => {
+                    if (existingMap.has(newItem.code)) {
+                        const oldItem = existingMap.get(newItem.code);
+                        oldItem.desc = newItem.desc; 
+                        oldItem.qtyOrig = newItem.qtyOrig; 
+                        oldItem.balance = oldItem.qtyOrig - oldItem.received; 
+                        if(oldItem.balance < 0) oldItem.over = true;
+                        
+                        existingMap.delete(newItem.code); 
+                        updatedItemsCount++;
+                        return oldItem;
+                    } else {
+                        newItemsCount++;
+                        newItem.id = Date.now() + Math.random(); 
+                        return newItem;
+                    }
+                });
+
+                const newRev = (parseInt(existingPO.rev) || 0) + 1;
+                
+                const updatedPO = {
+                    ...existingPO,
+                    rev: newRev,
+                    items: mergedItems,
+                    date: Date.now()
+                };
+
+                await core.db.op('readwrite', 'saved_pos', 'put', updatedPO);
+                
+                core.data.items = updatedPO.items;
+                core.data.po = updatedPO.poRef;
+                core.data.meta = { supplier: updatedPO.supplier, rev: newRev, subject: updatedPO.subject };
+                core.data.view = [...core.data.items];
+                
+                await core.saveSession();
+                this.renderSavedPOs();
+                this.toScreen('listScreen');
+                this.renderListChunk(true);
+                
+                Toast.show('success', this.t('merged_toast_title'), this.t('merged_toast_msg', {newRev: newRev, updated: updatedItemsCount, added: newItemsCount}));
+            },
+            
+            async savePO() {
+                const supp = document.getElementById('metaSupplier').value;
+                if(!supp) return alert(this.t('supplier_required'));
+                
+                const meta = {
+                    supplier: supp,
+                    rev: document.getElementById('metaRev').value,
+                    subject: document.getElementById('metaSubject').value
+                };
+                
+                const payload = {
+                    poRef: core.stagingData.po,
+                    items: core.stagingData.items,
+                    ...meta,
+                    date: Date.now()
+                };
+                
+                await core.db.op('readwrite', 'saved_pos', 'put', payload);
+                this.closeModal('savePOModal');
+                
+                core.data.items = payload.items;
+                core.data.po = payload.poRef;
+                core.data.meta = meta;
+                core.data.view = [...core.data.items];
+                
+                await core.saveSession();
+                this.renderSavedPOs();
+                this.toScreen('listScreen');
+                this.renderListChunk(true);
+            },
+            
+            async handleSigUpload(input, imgId) {
+                if(input.files && input.files[0]) {
+                    try {
+                        const b64 = await Utils.fileToBase64(input.files[0]);
+                        const img = document.getElementById(imgId);
+                        img.src = b64;
+                        img.classList.remove('hidden');
+                        img.setAttribute('data-val', b64);
+                    } catch(e) {
+                        Toast.show('error', this.t('msg_error'), this.t('img_load_fail'));
+                    }
+                }
+            },
+
+            handleSearch: Utils.debounce(function(val) {
+                const t = val.toLowerCase();
+                core.data.view = core.data.items.filter(i => 
+                    i.code.toLowerCase().includes(t) || 
+                    i.desc.toLowerCase().includes(t) || 
+                    i.itemNo.toLowerCase().includes(t)
+                );
+                core.currentChunk = 0;
+                document.getElementById('itemsContainer').innerHTML = '';
+                this.renderListChunk(true);
+            }, 300),
+
+            renderListChunk(reset = false) {
+                if (reset) {
+                    core.currentChunk = 0;
+                    document.getElementById('itemsContainer').innerHTML = '';
+                    document.getElementById('itemsScrollContainer').scrollTop = 0;
+                }
+
+                const start = core.currentChunk * core.chunkSize;
+                const end = start + core.chunkSize;
+                const itemsToRender = core.data.view.slice(start, end);
+
+                if (itemsToRender.length === 0 && core.currentChunk === 0) {
+                     document.getElementById('itemsContainer').innerHTML = `<div class="text-center p-10 text-slate-400 font-medium">${this.t('no_items_found')}</div>`;
+                     return;
+                }
+
+                const container = document.getElementById('itemsContainer');
+                
+                itemsToRender.forEach(i => {
+                    const isDone = i.balance <= 0.001 && !i.free && !i.over;
+                    const hasRec = i.received > 0;
+                    let color = isDone ? 'border-l-green-500 bg-green-50/60 opacity-60 grayscale' : (hasRec ? 'border-l-saipem-yellow bg-yellow-50/50' : 'border-l-slate-300 bg-white');
+                    if(i.free) color = 'border-l-purple-400 bg-purple-50/20';
+                    if(i.over) color = 'border-l-red-500 bg-red-50/20';
+
+                    let badges = '';
+                    if(i.free) badges += `<span class="bg-purple-100 text-purple-700 text-[9px] font-extrabold px-2 py-0.5 rounded uppercase tracking-wide">${this.t('status_manual')}</span>`;
+                    else if(i.over) badges += `<span class="bg-red-100 text-red-700 text-[9px] font-extrabold px-2 py-0.5 rounded uppercase tracking-wide">${this.t('status_surplus')}</span>`;
+                    else if(hasRec && isDone) badges += `<span class="bg-green-100 text-green-700 text-[9px] font-extrabold px-2 py-0.5 rounded uppercase tracking-wide">${this.t('status_done')}</span>`;
+
+                    const splitsHtml = i.splits.length ? `<div class="mt-2.5 flex flex-wrap gap-1.5 overflow-hidden h-6">${i.splits.map(s=>`<span class="inline-flex items-center text-[10px] bg-slate-50 border border-slate-200 text-slate-600 px-2 py-0.5 rounded-md font-medium"><i class="ph-bold ph-fire mr-1 text-saipem-blue"></i>${s.heat}</span>`).join('')}</div>` : '';
+
+                    const html = `
+<div class="item-card rounded-2xl shadow-[0_2px_10px_rgba(0,0,0,0.03)] border border-slate-100 p-3 md:p-6 hover:shadow-lg transition-all cursor-pointer group border-l-[6px] ${color} overflow-hidden bg-opacity-90" onclick="App.openSplitModal(${i.id})">
+    <div class="flex justify-between items-start h-full">
+        <div class="flex-1 pr-2 md:pr-6 overflow-hidden">
+            <div class="flex items-center gap-2 md:gap-3 mb-1 flex-wrap">
+                <span class="font-mono text-[9px] md:text-[10px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 md:px-2 rounded border border-slate-200">#${i.itemNo}</span>
+                <span class="font-mono text-[10px] md:text-xs font-bold text-saipem-blue truncate bg-blue-50/50 px-1 rounded">${Utils.esc(i.code)}</span>
+                ${badges}
+            </div>
+            <h3 class="text-xs md:text-sm font-semibold text-slate-800 leading-snug group-hover:text-saipem-blue transition-colors line-clamp-2" title="${Utils.esc(i.desc)}">${Utils.esc(i.desc)}</h3>
+            ${splitsHtml}
+        </div>
+        
+        <div class="text-right shrink-0 pl-2 md:pl-4 border-l border-slate-100 min-w-[70px] md:min-w-[90px] flex flex-col justify-center">
+            <p class="text-[8px] md:text-[9px] uppercase text-slate-400 font-extrabold tracking-widest mb-0.5">${this.t('balance')}</p>
+            
+            <p class="text-lg md:text-2xl font-extrabold ${i.free?'text-purple-600':(i.balance<0?'text-red-500':'text-slate-700')}">
+                ${i.free?'∞':i.balance.toLocaleString('pt-BR')}
+                <span class="text-[9px] md:text-xs font-bold text-slate-400 ml-0.5 align-top mt-0.5 inline-block">${i.unit}</span>
+            </p>
+            
+            ${i.received>0 ? `<p class="text-[9px] md:text-xs font-bold text-saipem-blue mt-0.5 bg-blue-50 px-1 rounded inline-block self-end">+${i.received.toLocaleString('pt-BR')}</p>` : ''}
+        </div>
+    </div>
+</div>`;
+                    
+                    container.insertAdjacentHTML('beforeend', html);
+                });
+
+                if (itemsToRender.length > 0) {
+                    core.currentChunk++;
+                }
+                
+                const loadingMore = document.getElementById('loadingMore');
+                if (end >= core.data.view.length) loadingMore.classList.add('hidden');
+                else loadingMore.classList.remove('hidden');
+
+                this.updateDashboard();
+            },
+
+            async reset() {
+                if(confirm(this.t('close_session_confirm'))) {
+                    this.setLoading(true);
+                    document.getElementById('fileInput').value = '';
+                    core.data.items = []; core.data.view = []; core.data.po = 'N/A';
+                    const db = await core.db.init();
+                    const tx = db.transaction(['session'], 'readwrite');
+                    tx.objectStore('session').delete('current');
+                    tx.oncomplete = () => { window.location.reload(); };
+                }
+            },
+
+            toScreen(id) {
+                ['uploadScreen','listScreen','historyScreen'].forEach(s => document.getElementById(s).classList.add('hidden'));
+                document.getElementById(id).classList.remove('hidden');
+                if(id==='listScreen') this.updateDashboard();
+            },
+            renderHeader() {
+                document.getElementById('headerUserName').innerText = core.data.user.name || this.t('user_generic');
+                document.getElementById('headerUserRole').innerText = core.data.user.role || this.t('role_generic');
+                document.getElementById('headerUserAvatar').innerText = (core.data.user.name || 'U').charAt(0);
+            },
+
+            updateDashboard() {
+                const items = core.data.items;
+                const rec = items.filter(i => i.received > 0).length;
+                const pct = items.length ? Math.round((rec/items.length)*100) : 0;
+                document.getElementById('dashPoNumber').innerText = core.data.po;
+                document.getElementById('dashStatsText').innerText = this.t('dash_stats_format', {rec: rec, total: items.length});
+                document.getElementById('dashSupplier').innerText = core.data.meta.supplier || '---';
+                document.getElementById('dashPercentage').innerText = `${pct}%`;
+                document.getElementById('dashProgressBar').style.width = `${pct}%`;
+            },
+
+            updateDimInputs(cat) {
+                const fields = Dimensions.getFields(cat);
+                const container = document.getElementById('dimGrid');
+                const eaMsg = document.getElementById('eaMessage');
+                const dimBox = document.getElementById('dimContainer');
+                container.innerHTML = '';
+                eaMsg.classList.add('hidden');
+                dimBox.classList.remove('opacity-50', 'pointer-events-none');
+                
+                if (Object.keys(fields).length === 0) {
+                    eaMsg.classList.remove('hidden');
+                    return;
+                }
+
+                const mkInput = (id, lbl, w='w-full') => `
+                    <div class="relative group ${w}">
+                        <input type="text" inputmode="decimal" id="${id}" placeholder="0" oninput="App.calcWeight()" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-center text-sm font-mono font-bold text-slate-700 focus:bg-white focus:border-saipem-blue focus:ring-1 focus:ring-saipem-blue outline-none transition-all">
+                        <span class="absolute -bottom-5 left-0 w-full text-[9px] text-center text-slate-400 font-bold uppercase tracking-wide">${lbl}</span>
+                    </div>`;
+
+                if(fields.l) container.insertAdjacentHTML('beforeend', mkInput('dimL', 'Length (mm)'));
+                if(fields.w) container.insertAdjacentHTML('beforeend', mkInput('dimW', 'Width (mm)'));
+                if(fields.d) container.insertAdjacentHTML('beforeend', mkInput('dimD', 'Diam (mm)'));
+                if(fields.t) container.insertAdjacentHTML('beforeend', mkInput('dimT', 'Thick (mm)'));
+                if(fields.linear) container.insertAdjacentHTML('beforeend', mkInput('dimLinear', 'Kg/m (Linear)', 'col-span-2 border-l-2 border-blue-200 pl-2'));
+            },
+
+            calcWeight() {
+                const getV = (id) => {
+                    const el = document.getElementById(id);
+                    if(!el || !el.value) return 0;
+                    let clean = el.value.replace(/[^0-9.,]/g, '');
+                    clean = clean.replace(',', '.');
+                    return parseFloat(clean) || 0;
+                };
+
+                const L = getV('dimL');
+                const W = getV('dimW');
+                const T = getV('dimT');
+                const D = getV('dimD');
+                const Linear = getV('dimLinear');
+                
+                let weight = 0;
+                const density = 0.00000785; 
+
+                const item = core.getCurrItem();
+                if(item && L > 0) {
+                    const u = item.unit.toLowerCase();
+                    if(u === 'm' || u === 'meter' || u === 'mts') {
+                        document.getElementById('inputQty').value = (L / 1000).toFixed(3);
+                    }
+                }
+
+                if (item.cat === Dimensions.TYPES.PLATE && L && W && T) weight = L * W * T * density;
+                else if (item.cat === Dimensions.TYPES.PIPE && L && D && T) weight = (D - T) * T * 0.02466 * (L / 1000); 
+                else if (item.cat === Dimensions.TYPES.BAR && L && D) weight = (D * D) * 0.00617 * (L / 1000);
+                else if (item.cat === Dimensions.TYPES.BEAM && L && Linear) weight = (L / 1000) * Linear;
+
+                if(weight > 0) document.getElementById('inputWeight').value = weight.toFixed(2);
+            },
+
+            openSplitModal(id) {
+                core.data.currId = id;
+                const item = core.getCurrItem();
+                if(!item) return;
+                document.getElementById('modalItemBadge').innerText = `ITEM ${item.itemNo}`;
+                document.getElementById('modalCode').innerText = item.code;
+                document.getElementById('modalCat').innerText = item.cat;
+                document.getElementById('inputDesc').value = item.desc;
+                document.getElementById('modalBalance').innerText = item.free ? '∞' : item.balance.toLocaleString('pt-BR');
+                document.getElementById('modalUnit').innerText = item.unit;
+                document.getElementById('splitForm').reset();
+                document.getElementById('inputWeight').value = "";
+                this.updateDimInputs(item.cat);
+                document.getElementById('splitModal').classList.remove('hidden');
+                this.renderModalSplits(item);
+                setTimeout(()=>document.getElementById('inputHeat').focus(), 100);
+            },
+            
+            checkSplit() {
+                const item = core.getCurrItem();
+                const qtyVal = document.getElementById('inputQty').value;
+                const qty = parseFloat(qtyVal);
+                const heat = document.getElementById('inputHeat').value.trim().toUpperCase();
+                
+                const newDesc = document.getElementById('inputDesc').value.trim();
+                if(newDesc && newDesc !== item.desc) { item.desc = newDesc; }
+
+                if(isNaN(qty) || qty <= 0 || !heat) return Toast.show('error', this.t('msg_error'), this.t('invalid_split_data'));
+
+                const v = (id) => document.getElementById(id) ? document.getElementById(id).value : '';
+
+                const splitData = {
+                    id: Date.now().toString(), heat, qty,
+                    trace: document.getElementById('inputTrace').value.trim().toUpperCase(),
+                    inv: document.getElementById('inputInv').value.trim(),
+                    rem: document.getElementById('inputRemarks').value.trim(),
+                    dims: { l: v('dimL')||0, w: v('dimW')||0, t: v('dimT')||0, d: v('dimD')||0 },
+                    wgt: parseFloat(document.getElementById('inputWeight').value) || 0
+                };
+
+                if (!item.free && ((item.received + qty) > (item.balance + item.received + 0.0001))) {
+                    core.data.pendingSplit = splitData;
+                    document.getElementById('surplusBalance').innerText = (Math.max(0, item.balance)).toFixed(3);
+                    document.getElementById('surplusQty').innerText = qty.toFixed(3);
+                    document.getElementById('surplusModal').classList.remove('hidden');
+                    return; 
+                }
+                this.commitSplit(item, splitData);
+            },
+            confirmSurplus() {
+                if(core.data.pendingSplit) {
+                    core.getCurrItem().over = true;
+                    this.commitSplit(core.getCurrItem(), core.data.pendingSplit);
+                    core.data.pendingSplit = null;
+                    document.getElementById('surplusModal').classList.add('hidden');
+                }
+            },
+            cancelSurplus() { core.data.pendingSplit = null; document.getElementById('surplusModal').classList.add('hidden'); },
+
+            commitSplit(item, split) {
+                if (!split.dims) split.dims = { l:0, w:0, t:0, d:0 };
+                
+                item.splits.push(split);
+                item.received += split.qty;
+                item.balance = item.qtyOrig - item.received;
+                
+                document.getElementById('inputQty').value = '';
+                document.getElementById('inputHeat').value = '';
+                document.getElementById('inputWeight').value = '';
+                const dims = ['dimL','dimW','dimT','dimD'];
+                dims.forEach(d => { if(document.getElementById(d)) document.getElementById(d).value = ''; });
+
+                document.getElementById('inputHeat').focus();
+                this.renderModalSplits(item);
+                this.refreshVisibleCard(item.id);
+                core.saveSession(); 
+            },
+
+            editSplit(splitId) {
+                const item = core.getCurrItem();
+                const idx = item.splits.findIndex(s => s.id === splitId);
+                if(idx === -1) return;
+                const split = item.splits[idx];
+                document.getElementById('inputHeat').value = split.heat;
+                document.getElementById('inputQty').value = split.qty;
+                document.getElementById('inputInv').value = split.inv || '';
+                document.getElementById('inputTrace').value = split.trace || '';
+                document.getElementById('inputRemarks').value = split.rem || '';
+                document.getElementById('inputWeight').value = split.wgt || '';
+                
+                const d = split.dims || {};
+                const set = (id, v) => { if(document.getElementById(id)) document.getElementById(id).value = v || ''; };
+                set('dimL', d.l); set('dimW', d.w); set('dimT', d.t); set('dimD', d.d);
+                
+                this.removeSplitLogic(item, idx);
+                Toast.show('info', '...', this.t('batch_to_form'));
+            },
+
+            duplicateSplit(splitId) {
+                const item = core.getCurrItem();
+                const idx = item.splits.findIndex(s => s.id === splitId);
+                if(idx === -1) return;
+                
+                const original = item.splits[idx];
+                const newSplit = JSON.parse(JSON.stringify(original)); 
+                newSplit.id = Date.now().toString(); 
+                
+                if (!item.free && ((item.received + newSplit.qty) > (item.balance + item.received + 0.0001))) {
+                    if(!confirm(this.t('surplus_confirm'))) return;
+                    item.over = true;
+                }
+
+                item.splits.push(newSplit);
+                item.received += newSplit.qty;
+                item.balance = item.qtyOrig - item.received;
+
+                this.renderModalSplits(item);
+                this.refreshVisibleCard(item.id);
+                core.saveSession();
+                Toast.show('success', this.t('msg_success'), this.t('batch_duplicated'));
+            },
+
+            removeSplit(splitId) {
+                const item = core.getCurrItem();
+                const idx = item.splits.findIndex(s => s.id === splitId);
+                if(idx === -1) return;
+                const removedSplit = {...item.splits[idx]};
+                this.removeSplitLogic(item, idx);
+                Toast.show('info', 'Removed', this.t('batch_removed', {heat: removedSplit.heat}));
+            },
+
+            removeSplitLogic(item, idx) {
+                const s = item.splits[idx];
+                item.received -= s.qty;
+                item.balance = item.qtyOrig - item.received;
+                item.splits.splice(idx, 1);
+                if(item.received <= item.qtyOrig) item.over = false;
+                this.renderModalSplits(item);
+                this.refreshVisibleCard(item.id);
+                core.saveSession(); 
+            },
+
+            renderModalSplits(item) {
+                const c = document.getElementById('modalSplitsList');
+                c.innerHTML = '';
+                [...item.splits].reverse().forEach((s) => {
+                    const div = document.createElement('div');
+                    div.className = "flex justify-between items-center bg-slate-50 border border-slate-200 p-3 rounded-lg text-sm group hover:bg-white hover:shadow-md transition-all";
+                    div.innerHTML = `
+                        <div class="flex items-center gap-4 flex-1">
+                            <span class="font-mono font-bold text-saipem-blue text-sm">${s.heat}</span>
+                            <span class="bg-blue-100 text-saipem-blue text-xs font-extrabold px-2 py-0.5 rounded border border-blue-200">${s.qty}</span>
+                            <span class="text-xs text-slate-400 truncate max-w-[120px] font-medium hidden sm:block">${s.trace||''}</span>
+                        </div>
+                        <div class="flex gap-2">
+                            <button type="button" onclick="App.duplicateSplit('${s.id}')" class="text-slate-400 hover:text-saipem-blue p-1.5 rounded hover:bg-slate-100"><i class="ph-bold ph-copy text-lg"></i></button>
+                            <button type="button" onclick="App.editSplit('${s.id}')" class="text-slate-400 hover:text-saipem-blue p-1.5 rounded hover:bg-slate-100"><i class="ph-bold ph-pencil-simple text-lg"></i></button>
+                            <button type="button" onclick="App.removeSplit('${s.id}')" class="text-slate-400 hover:text-red-500 p-1.5 rounded hover:bg-red-50"><i class="ph-bold ph-trash text-lg"></i></button>
+                        </div>
+                    `;
+                    c.appendChild(div);
+                });
+            },
+
+            refreshVisibleCard(id) {
+                const savedChunk = core.currentChunk;
+                core.currentChunk = 0;
+                this.renderListChunk(true); 
+                while(core.currentChunk < savedChunk) {
+                    this.renderListChunk();
+                }
+            },
+
+            openFreeIssueModal() {
+                const html = `
+                <div class="space-y-4">
+                    <div class="p-3 bg-purple-50 border border-purple-100 rounded text-xs text-purple-700 font-bold">${this.t('manual_entry')}</div>
+                    <div class="flex gap-2">
+                        <input id="fiPO" class="w-1/2 border border-slate-300 p-3 rounded-lg text-sm outline-none focus:border-saipem-blue" placeholder="${this.t('free_issue_placeholder_po')}">
+                        <input id="fiItem" class="w-1/2 border border-slate-300 p-3 rounded-lg text-sm outline-none focus:border-saipem-blue" placeholder="${this.t('free_issue_placeholder_item')}">
+                    </div>
+                    <input id="fiCode" class="w-full border border-slate-300 p-3 rounded-lg text-sm outline-none focus:border-saipem-blue" placeholder="${this.t('free_issue_placeholder_code')}">
+                    <textarea id="fiDesc" class="w-full border border-slate-300 p-3 rounded-lg text-sm outline-none focus:border-saipem-blue" placeholder="${this.t('free_issue_placeholder_desc')}"></textarea>
+                    <div class="flex gap-2">
+                        <select id="fiUnit" class="border border-slate-300 p-3 rounded-lg text-sm w-1/3 bg-white outline-none">
+                            <option>UN</option><option>EA</option><option>SET</option><option>M</option><option>MM</option><option>M2</option><option>M3</option><option>KG</option><option>TON</option><option>L</option><option>GAL</option><option>PÇ</option><option>RL</option>
+                        </select>
+                        <button onclick="App.addFreeIssue(true)" class="bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-lg px-4 shadow text-xs">${this.t('save_and_new')}</button>
+                        <button onclick="App.addFreeIssue(false)" class="bg-saipem-blue text-white font-bold rounded-lg flex-1 shadow-lg text-sm">${this.t('create_item')}</button>
+                    </div>
+                </div>`;
+                this.openGenericModal(this.t('manual_entry'), html);
+            },
+            
+            addFreeIssue(keepOpen = false) {
+                const po = document.getElementById('fiPO').value || 'MANUAL';
+                const itemNo = document.getElementById('fiItem').value || '00';
+                const code = document.getElementById('fiCode').value;
+                const desc = document.getElementById('fiDesc').value;
+                
+                if(!code || !desc) return Toast.show('error', this.t('msg_error'), this.t('free_issue_error'));
+                
+                const ni = { 
+                    id: Date.now(), po, itemNo, code, desc, qtyOrig: 0, 
+                    unit: document.getElementById('fiUnit').value, 
+                    balance: 0, received: 0, splits: [], 
+                    free: true, over: false, 
+                    cat: Dimensions.detectCategory(desc, document.getElementById('fiUnit').value) 
+                };
+                
+                core.data.items.unshift(ni); core.data.view.unshift(ni);
+                core.saveSession(); 
+                
+                if(keepOpen) {
+                    Toast.show('success', this.t('msg_success'), this.t('free_issue_created', {code: code}));
+                    document.getElementById('fiCode').value = '';
+                    document.getElementById('fiDesc').value = '';
+                    document.getElementById('fiCode').focus();
+                    this.refreshVisibleCard(ni.id); 
+                } else {
+                    this.closeModal('genericModal'); 
+                    this.toScreen('listScreen'); 
+                    this.renderListChunk(true);
+                    this.openSplitModal(ni.id);
+                }
+            },
+
+            openReportConfig() {
+                const items = core.data.items.filter(i => i.received > 0);
+                if(!items.length) return Toast.show('error', this.t('msg_error'), this.t('no_received_items'));
+                
+                document.getElementById('reportConfigModal').classList.remove('hidden');
+                document.getElementById('reviewCount').innerText = items.length;
+                
+                document.getElementById('sigIssuedDisp').value = core.data.user.name;
+                document.getElementById('sigVerified').value = core.data.user.sigs?.verified?.name || '';
+                document.getElementById('sigApproved').value = core.data.user.sigs?.approved?.name || '';
+                document.getElementById('rptSupplier').value = core.data.meta.supplier || '';
+
+                this.renderReviewList(items);
+            },
+
+            renderReviewList(items) {
+                const c = document.getElementById('reviewListContainer');
+                c.innerHTML = '';
+                
+                items.forEach(i => {
+                    i.splits.forEach(s => {
+                        const div = document.createElement('div');
+                        div.className = "border-b border-slate-100 p-4 hover:bg-slate-50 transition-colors flex justify-between items-start";
+                        div.innerHTML = `
+                            <div class="pr-4">
+                                <div class="flex items-center gap-2 mb-1">
+                                    <span class="text-[10px] font-bold bg-slate-200 text-slate-600 px-1.5 rounded border border-slate-300">#${i.itemNo}</span>
+                                    <span class="text-xs font-bold text-saipem-blue">${i.code}</span>
+                                </div>
+                                <p class="text-xs text-slate-600 line-clamp-2 mb-1 leading-snug">${i.desc}</p>
+                                <div class="flex gap-2 text-[10px] font-mono font-bold text-slate-500">
+                                    <span class="bg-blue-50 px-1 rounded text-saipem-blue">HT: ${s.heat}</span>
+                                    <span class="bg-green-50 px-1 rounded text-green-700">QTD: ${s.qty}</span>
+                                </div>
+                            </div>
+                            <button onclick="App.editItemFromReview(${i.id}, '${s.id}')" class="text-slate-300 hover:text-saipem-blue p-2"><i class="ph-bold ph-pencil-simple text-lg"></i></button>
+                        `;
+                        c.appendChild(div);
+                    });
+                });
+            },
+
+            editItemFromReview(itemId, splitId) {
+                this.closeModal('reportConfigModal');
+                this.openSplitModal(itemId);
+                setTimeout(() => this.editSplit(splitId), 200);
+            },
+            
+            exportReportExcel() {
+                const rptNo = document.getElementById('rptNo').value || 'REPORT';
+                const defRegime = document.getElementById('rptRegime').value || '';
+                
+                const rows = [];
+                let count = 1;
+                
+                core.data.items.filter(i => i.received > 0).forEach(i => {
+                    i.splits.forEach(s => {
+                        const d = s.dims || {l:0, w:0, t:0, d:0};
+                        rows.push({
+                            "No": count++, "Description": i.desc, "PO No": i.po, "Item No": i.itemNo,
+                            "Traceability Tag": s.trace || '-', "Heat Number": s.heat, "Qty Received": s.qty, "Unit": i.unit,
+                            "Length (mm)": d.l||0, "Width (mm)": d.w||0, "Thick (mm)": d.t||0, "Diam (mm)": d.d||0,
+                            "Weight (kg)": s.wgt||0, "Regime": defRegime, "Invoice (NF)": s.inv||'-', "Remarks": s.rem||''
+                        });
+                    });
+                });
+
+                if(!rows.length) return Toast.show('error', this.t('msg_error'), this.t('no_export_items'));
+
+                const ws = XLSX.utils.json_to_sheet(rows);
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, "MRIR Data");
+                XLSX.writeFile(wb, `MRIR_${rptNo}.xlsx`);
+                Toast.show('success', this.t('msg_success'), this.t('excel_exported'));
+            },
+
+            sendEmail() {
+                const rpt = {
+                    no: document.getElementById('rptNo').value, proj: document.getElementById('rptProject').value,
+                    supp: document.getElementById('rptSupplier').value, count: core.data.items.filter(i => i.received > 0).length
+                };
+                const subject = encodeURIComponent(`MRIR Report: ${rpt.no} - ${rpt.proj}`);
+                const body = encodeURIComponent(`Dear Team,\n\nPlease find attached the MRIR Report ${rpt.no}.\n\nProject: ${rpt.proj}\nSupplier: ${rpt.supp}\nItems Received: ${rpt.count}\n\n*Please attach the generated PDF manually to this email.*\n\nBest Regards,\n${core.data.user.name}`);
+                window.location.href = `mailto:?subject=${subject}&body=${body}`;
+            },
+
+            async generateFinalPDF(historyData = null) {
+                if(!historyData) this.closeModal('reportConfigModal');
+                this.setLoading(true);
+
+                try {
+                    let rptData, items;
+                    
+                    if(historyData) {
+                        rptData = historyData.snapshotConfig;
+                        items = historyData.snapshotItems.filter(i => i.received > 0);
+                    } else {
+                        rptData = {
+                            no: document.getElementById('rptNo').value, project: document.getElementById('rptProject').value,
+                            supplier: document.getElementById('rptSupplier').value, location: document.getElementById('rptLocation').value,
+                            unload: document.getElementById('rptUnloading').value, defRegime: document.getElementById('rptRegime').value,
+                            docRef: document.getElementById('rptDocRef').value, date: document.getElementById('rptDate').value, 
+                            notes: document.getElementById('rptNotes').value
+                        };
+                        items = core.data.items.filter(i => i.received > 0);
+                    }
+
+                    let dateDisplay = new Date().toLocaleDateString('pt-BR'); 
+                    if(rptData.date) {
+                        const [yyyy, mm, dd] = rptData.date.split('-'); 
+                        dateDisplay = `${dd}/${mm}/${yyyy}`;
+                    }
+
+                    const sigIssued = { name: historyData ? historyData.operator : core.data.user.name, img: core.data.user.sigImg || null };
+                    const sigVerified = { name: historyData ? '' : document.getElementById('sigVerified').value };
+                    const sigApproved = { name: historyData ? '' : document.getElementById('sigApproved').value };
+
+                    let counter = 1;
+                    let rowsHtml = '';
+                    
+                    // --- GERAÇÃO DAS LINHAS (ORDEM ALTERADA AQUI) ---
+                    items.forEach(i => {
+                        i.splits.forEach(s => {
+                            const d = s.dims || {l:0, w:0, t:0, d:0};
+                            const fmt = v => (!v || v == 0) ? '-' : v; 
+                            const wgt = (s.wgt && parseFloat(s.wgt) > 0) ? parseFloat(s.wgt).toFixed(2) : '-';
+                            
+                            // AQUI SEGUE A ORDEM EXATA DE 16 COLUNAS QUE VOCÊ PEDIU
+                            rowsHtml += `<tr>
+                                <td>${counter++}</td>
+                                <td style="text-align:left;">${i.desc||''}</td>
+                                <td style="font-weight:bold;">${s.qty}</td>
+                                <td>${i.unit}</td>
+                                <td>${fmt(d.d)}</td>
+                                <td>${fmt(d.t)}</td>
+                                <td>${fmt(d.w)}</td>
+                                <td>${fmt(d.l)}</td>
+                                <td>${wgt}</td>
+                                <td>${s.trace||'-'}</td>
+                                <td>${s.heat||'-'}</td>
+                                <td>${i.po||''}</td>
+                                <td>${i.itemNo||''}</td>
+                                <td>${s.inv||'-'}</td>
+                                <td>${rptData.defRegime}</td>
+                                <td>${s.rem||''}</td>
+                            </tr>`;
+                        });
+                    });
+
+                    const renderSigCell = (title, sigData, isAuto) => {
+                         let content = '';
+                         if(isAuto && sigData.img) {
+                             content = `<div style="display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; padding-bottom: 5px; width: 100%;"><img src="${sigData.img}" style="max-height: 40px; margin-bottom: 2px;" alt="Sig"><div style="border-top: 1pt solid black; width: 80%; margin: 2px 0;"></div><div style="font-size: 9px; font-weight: bold;">${title}</div><div style="font-family: 'Courier New'; font-weight: bold; font-size: 10px;">${sigData.name}</div><div style="font-size: 8px;">${dateDisplay}</div></div>`;
+                         } else {
+                             content = `<div style="display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; padding-bottom: 5px; width: 100%;"><div style="height:35px;"></div><div style="border-top: 1pt solid black; width: 80%; margin: 2px 0;"></div><div style="font-size: 9px; font-weight: bold;">${title}</div><div style="font-family: 'Courier New'; font-weight: bold; font-size: 10px;">${sigData.name||''}</div><div style="font-size: 8px;">${sigData.name?dateDisplay:''}</div></div>`;
+                         }
+                         return `<td style="padding:0; height:80px; vertical-align:bottom;">${content}</td>`;
+                    };
+
+                    // --- HTML DO RELATÓRIO (CABEÇALHOS ALTERADOS AQUI) ---
+                    // Ajustei as larguras no <colgroup> para acomodar as 16 colunas
+                    const reportHtml = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>MRIR_${rptData.no}</title><style>@media print{@page{size:landscape;margin:5mm}body{-webkit-print-color-adjust:exact;margin:0;padding:0}}body{font-family:'Arial Narrow',sans-serif;margin:0;background:#fff;font-size:9px;color:#000;box-sizing:border-box}table{width:100%;border-collapse:collapse;table-layout:fixed}th,td{border:1pt solid #000;padding:2px;text-align:center;vertical-align:middle;word-wrap:break-word}thead{display:table-header-group}tfoot{display:table-footer-group}.header-table{width:100%;border-collapse:collapse;margin-bottom:5px;border:1pt solid #000}.header-table td{border:1pt solid #000;padding:2px 5px}.logo-img{max-height:28px;width:auto;display:block;margin:0 auto}.title-cell{font-size:16px;font-weight:bold;text-align:center}.doc-info-cell{width:180px;font-size:8px;padding:0!important}.doc-info-row{border-bottom:1pt solid #000;display:flex}.doc-info-row:last-child{border-bottom:none}.doc-lbl{width:50px;border-right:1pt solid #000;padding:2px;font-weight:bold;background:#f9f9f9}.doc-val{flex:1;padding:2px;text-align:left}.report-info-box{width:100%;box-sizing:border-box;border:0;margin-bottom:4px;padding:5px;display:flex;flex-wrap:wrap;gap:10px 80px}.info-item{display:flex;flex-direction:column}.info-lbl{font-size:8px;color:#333;text-transform:uppercase;margin-bottom:1px}.info-val{font-size:11px;font-weight:bold}.col-header{background-color:#f0f0f0;font-weight:bold;text-transform:uppercase;font-size:7px;padding:6px 2px}.general-notes{border:0;padding:2px;margin-top:10px;min-height:40px;text-align:left}.notes-lbl{font-weight:bold;text-decoration:underline;display:block;margin-bottom:3px}.footer-sigs{width:100%;border:1pt solid #000;margin-top:10px;border-collapse:collapse}</style></head><body>
+                    <table>
+                        <colgroup>
+                            <col style="width:2%">  <!-- N -->
+                            <col style="width:20%"> <!-- Desc -->
+                            <col style="width:4%">  <!-- Qty -->
+                            <col style="width:3%">  <!-- Un -->
+                            <col style="width:4%">  <!-- Diam -->
+                            <col style="width:4%">  <!-- Thick -->
+                            <col style="width:4%">  <!-- Width -->
+                            <col style="width:4%">  <!-- Len -->
+                            <col style="width:4%">  <!-- Wgt -->
+                            <col style="width:7%">  <!-- Tag -->
+                            <col style="width:7%">  <!-- Heat -->
+                            <col style="width:6%">  <!-- PO -->
+                            <col style="width:3%">  <!-- Item -->
+                            <col style="width:6%">  <!-- Inv -->
+                            <col style="width:5%">  <!-- Reg -->
+                            <col style="width:8%">  <!-- Rem -->
+                        </colgroup>
+                        <thead><tr><td colspan="16" style="border:none;padding:0 0 2px 0"><table class="header-table"><tr><td style="width:120px"><img src="https://www.saipem.com/themes/custom/saipem_theme/overrides-logo-colored.svg" alt="Saipem" class="logo-img"></td>
+                        <td class="title-cell">${this.t('pdf_title')}</td>
+                    <td class="doc-info-cell">
+                        <div class="doc-info-row">
+                            <div class="doc-lbl">Doc N°</div>
+                            <div class="doc-val">${rptData.docRef}</div>
+                        </div>
+                        <div class="doc-info-row">
+                            <div class="doc-lbl">Rev.</div>
+                            <div class="doc-val">01</div>
+                        </div>
+                        <div class="doc-info-row">
+                            <div class="doc-lbl">Doc. Ref.</div>
+                            <div class="doc-val">176037-A01-CON-A-WI-0001</div>
+                        </div>
+                    </td>
+                </tr>
+            </table>
+                        <div class="report-info-box">
+                        <div class="info-item"><span class="info-lbl">Report Nº</span><span class="info-val">${rptData.no}</span></div><div class="info-item"><span class="info-lbl">Date</span><span class="info-val">${dateDisplay}</span></div><div class="info-item"><span class="info-lbl">Project</span><span class="info-val">${rptData.project}</span></div><div class="info-item"><span class="info-lbl">Supplier</span><span class="info-val">${rptData.supplier}</span></div><div class="info-item"><span class="info-lbl">Location</span><span class="info-val">${rptData.location}</span></div><div class="info-item"><span class="info-lbl">Unloading Point</span><span class="info-val">${rptData.unload}</span></div></div></td></tr>
+                        
+                        <!-- CABEÇALHO REESTRUTURADO -->
+                        <tr>
+                            <th class="col-header">N°</th>
+                            <th class="col-header">MATERIAL DESCRIPTION</th>
+                            <th class="col-header">QTY RECEIVED</th>
+                            <th class="col-header">UN.</th>
+                            <th class="col-header">DIAM. [mm]</th>
+                            <th class="col-header">THICK [mm]</th>
+                            <th class="col-header">WIDTH [mm]</th>
+                            <th class="col-header">LENGTH [mm]</th>
+                            <th class="col-header">WEIGHT [kg]</th>
+                            <th class="col-header">SAIPEM TRACEABILITY</th>
+                            <th class="col-header">HEAT NUMBER</th>
+                            <th class="col-header">PO N°</th>
+                            <th class="col-header">PO ITEM N°</th>
+                            <th class="col-header">INVOICE</th>
+                            <th class="col-header">REGIME</th>
+                            <th class="col-header">REMARKS</th>
+                        </tr>
+                        </thead>
+                        <tbody>${rowsHtml}</tbody>
+                        <tfoot><tr><td colspan="16" style="border:none;padding:10px 0 0 0"><div class="general-notes"><span class="notes-lbl">GENERAL NOTES:</span><div>${rptData.notes}</div></div><table class="footer-sigs"><tbody><tr>${renderSigCell('Issued By (Storekeeper)',sigIssued,true)}${renderSigCell('Verified By (Material Analyst)',sigVerified,false)}${renderSigCell('Approved By (Warehouse Supervisor)',sigApproved,false)}</tr></tbody></table></td></tr></tfoot></table><script>window.onload=function(){setTimeout(function(){window.print()},500)}<\/script></body></html>`;
+
+                    const win = window.open('', '_blank', 'width=1200,height=800');
+                    if(win) {
+                        win.document.write(reportHtml);
+                        win.document.close();
+                    } else { alert(this.t('popup_alert')); }
+                    
+                    if(!historyData) {
+                        const snapshot = {
+                             date: Date.now(), poNumber: core.data.po, rptNo: rptData.no,
+                             operator: core.data.user.name, itemsCount: items.length,
+                             snapshotItems: core.data.items, snapshotConfig: rptData 
+                        };
+                        await core.db.op('readwrite','rec','put', snapshot);
+                        Toast.show('success', this.t('msg_success'), this.t('report_generated'));
+                    } else {
+                        Toast.show('success', 'Reprint', this.t('reprint_success'));
+                    }
+
+                } catch(e) { console.error(e); Toast.show('error', this.t('msg_error'), e.message); } 
+                finally { this.setLoading(false); }
+            },
+
+            async toggleHistory() {
+                const scr = document.getElementById('historyScreen');
+                if(scr.classList.contains('hidden')) {
+                    scr.classList.remove('hidden');
+                    this.renderHistoryList();
+                } else this.closeHistory();
+            },
+
+            async renderHistoryList(filterVal = '') {
+                const c = document.getElementById('historyListContainer');
+                c.innerHTML = `<div class="text-center text-slate-400">${this.t('loading_history')}</div>`;
+                
+                const list = await core.db.op('readonly','rec','getAll');
+                c.innerHTML = '';
+                
+                if(!list.length) {
+                    c.innerHTML = `<div class="text-center text-slate-400 p-10 font-medium">${this.t('no_history')}</div>`;
+                    return;
+                }
+
+                const filtered = list.filter(h => 
+                    (h.poNumber||'').toLowerCase().includes(filterVal.toLowerCase()) || 
+                    (h.rptNo||'').toLowerCase().includes(filterVal.toLowerCase())
+                );
+
+                const groups = filtered.reduce((acc, item) => {
+                    const po = item.poNumber || 'UNKNOWN';
+                    if(!acc[po]) acc[po] = [];
+                    acc[po].push(item);
+                    return acc;
+                }, {});
+
+                Object.keys(groups).sort().forEach(po => {
+                    const items = groups[po].sort((a,b) => b.date - a.date);
+                    const count = items.length;
+                    const groupDiv = document.createElement('div');
+                    groupDiv.className = "bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden";
+                    
+                    let innerItems = items.map(h => {
+                         const d = new Date(h.date);
+                         const dateString = `${d.toLocaleDateString()} ${d.toLocaleTimeString()}`;
+                         return `<div class="p-4 flex flex-col md:flex-row md:items-center justify-between hover:bg-slate-50 transition-colors gap-3 border-b border-slate-100 last:border-0">
+                            <div class="flex-1"><div class="flex items-center gap-3"><span class="font-bold text-saipem-blue">${h.rptNo||'NO-REF'}</span><span class="text-xs text-slate-400">${dateString}</span></div><div class="text-xs text-slate-500 mt-1">${this.t('issued_by')} <b>${h.operator||'User'}</b> • ${h.itemsCount} lines</div></div>
+                            <div class="flex gap-2 shrink-0"><button onclick="App.loadFromHistory(${h.id})" class="px-3 py-1.5 bg-white border border-saipem-blue text-saipem-blue hover:bg-blue-50 rounded text-xs font-bold shadow-sm transition-all">${this.t('load_edit_btn')}</button><button onclick="App.reprintHistory(${h.id})" class="px-3 py-1.5 bg-slate-100 text-slate-600 hover:bg-slate-200 rounded text-xs font-bold transition-all"><i class="ph-bold ph-printer"></i></button><button onclick="App.deleteHistory(${h.id})" class="px-3 py-1.5 bg-red-50 text-red-500 hover:bg-red-100 rounded text-xs font-bold transition-all"><i class="ph-bold ph-trash"></i></button></div>
+                         </div>`;
+                    }).join('');
+
+                    groupDiv.innerHTML = `<div class="bg-slate-50 px-6 py-3 border-b border-slate-200 flex justify-between items-center cursor-pointer hover:bg-slate-100 transition-colors" onclick="toggleGroup(this)"><div class="font-bold text-slate-700 flex items-center gap-2"><i class="ph-bold ph-folder text-saipem-yellow"></i> ${po}</div><span class="text-xs bg-white border border-slate-200 px-2 py-0.5 rounded text-slate-500 font-bold">${this.t('reports_count', {count: count})}</span></div><div class="hidden">${innerItems}</div>`;
+                    c.appendChild(groupDiv);
+                });
+            },
+
+            async deleteHistory(id) {
+                if(!confirm(this.t('delete_history_confirm'))) return;
+                await core.db.op('readwrite', 'rec', 'delete', id);
+                this.renderHistoryList();
+                this.renderSavedPOs(); 
+            },
+
+            filterHistory: Utils.debounce(function(val) { this.renderHistoryList(val); }, 300),
+
+            async loadFromHistory(id) {
+                if(core.data.items.length > 0 && !confirm(this.t('load_history_confirm'))) return;
+                
+                this.setLoading(true);
+                const rec = await core.db.op('readonly', 'rec', 'get', id);
+                if(rec) {
+                    core.data.items = rec.snapshotItems;
+                    core.data.po = rec.poNumber;
+                    core.data.meta = { supplier: rec.snapshotConfig.supplier || '' }; 
+                    core.data.view = [...core.data.items];
+                    await core.saveSession();
+                    this.closeHistory();
+                    this.toScreen('listScreen');
+                    this.renderListChunk(true);
+                    Toast.show('success', this.t('history_loaded'), this.t('history_loaded_msg'));
+                }
+                this.setLoading(false);
+            },
+
+            async reprintHistory(id) {
+                const rec = await core.db.op('readonly', 'rec', 'get', id);
+                if(rec) this.generateFinalPDF(rec);
+                else Toast.show('error', this.t('msg_error'), this.t('record_not_found'));
+            },
+
+            closeHistory() { document.getElementById('historyScreen').classList.add('hidden'); },
+            
+            openUserConfig() {
+                const u = core.data.user;
+                const html = `
+                <div class="space-y-5">
+                    <div>
+                        <div class="flex gap-3">
+                            <div class="flex-1"><label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">${this.t('my_name')}</label><input id="uName" class="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-sm font-medium outline-none" value="${u.name||''}"></div>
+                            <div class="flex-1"><label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">${this.t('my_role')}</label><input id="uRole" class="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-sm font-medium outline-none" value="${u.role||''}"></div>
+                        </div>
+                    </div>
+                    <div class="bg-blue-50/50 p-4 rounded-xl border border-blue-100">
+                        <p class="text-[10px] uppercase font-bold text-saipem-blue mb-3">${this.t('my_sig')}</p>
+                        <div class="flex items-center gap-3">
+                            <div class="w-20 h-10 border border-slate-300 bg-white flex items-center justify-center overflow-hidden rounded"><img id="uSigPreview" src="${u.sigImg||''}" class="${u.sigImg?'':'hidden'} max-h-full max-w-full"><span class="${u.sigImg?'hidden':''} text-[9px] text-slate-300">${this.t('no_img')}</span></div>
+                            <label class="cursor-pointer bg-white border border-slate-300 hover:border-saipem-blue text-slate-600 px-3 py-1.5 rounded text-xs font-bold transition-all">${this.t('upload_img')}<input type="file" accept="image/*" class="hidden" onchange="App.handleSigUpload(this, 'uSigPreview')"></label>
+                            <button onclick="document.getElementById('uSigPreview').src=''; document.getElementById('uSigPreview').classList.add('hidden');" class="text-red-400 hover:text-red-600 p-1"><i class="ph-bold ph-trash"></i></button>
+                        </div>
+                        <p class="text-[10px] text-slate-400 mt-2">${this.t('sig_tooltip')}</p>
+                    </div>
+                    <div class="border-t border-slate-100 pt-4">
+                        <p class="text-[10px] uppercase font-bold text-slate-400 mb-2">${this.t('default_team')}</p>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div><label class="block text-[9px] font-bold text-slate-400 uppercase mb-1">${this.t('def_verified')}</label><input id="uDefVer" class="w-full bg-slate-50 border border-slate-200 p-2 rounded text-xs" value="${u.sigs?.verified?.name||''}"></div>
+                            <div><label class="block text-[9px] font-bold text-slate-400 uppercase mb-1">${this.t('def_approved')}</label><input id="uDefApp" class="w-full bg-slate-50 border border-slate-200 p-2 rounded text-xs" value="${u.sigs?.approved?.name||''}"></div>
+                        </div>
+                    </div>
+                    <div class="border-t border-slate-100 pt-4">
+                        <h4 class="text-xs font-extrabold text-slate-400 uppercase tracking-wider mb-3">${this.t('db_management')}</h4>
+                        <div class="flex gap-3">
+                           <button onclick="App.exportBackup()" class="flex-1 text-sm font-bold text-green-600 hover:bg-green-50 border border-green-200 rounded-lg p-3 transition-colors">${this.t('export_json')}</button>
+                           <label class="flex-1 text-sm font-bold text-blue-600 hover:bg-blue-50 border border-blue-200 rounded-lg p-3 transition-colors cursor-pointer text-center">${this.t('import_json')}<input type="file" class="hidden" accept=".json" onchange="App.importBackup(this)"></label>
+                        </div>
+                    </div>
+                    <div class="border-t border-slate-100 pt-4 flex justify-between">
+                        <button onclick="App.nukeDB()" class="text-xs text-red-400 hover:text-red-600 font-extrabold uppercase tracking-wider py-2">${this.t('reset_all')}</button>
+                        <button onclick="App.saveUser()" class="bg-saipem-blue hover:bg-saipem-dark text-white px-8 py-2.5 rounded-xl font-bold shadow-lg transition-all">${this.t('save_profile')}</button>
+                    </div>
+                </div>`;
+                this.openGenericModal(this.t('user_settings'), html);
+            },
+            
+            async saveUser() {
+                const sigImg = document.getElementById('uSigPreview').classList.contains('hidden') ? null : document.getElementById('uSigPreview').src;
+                const u = { 
+                    name: document.getElementById('uName').value, role: document.getElementById('uRole').value, k:'user', sigImg,
+                    sigs: { verified: { name: document.getElementById('uDefVer').value }, approved: { name: document.getElementById('uDefApp').value } }
+                };
+                await core.db.op('readwrite','cfg','put',u); 
+                core.data.user = u; 
+                this.renderHeader(); 
+                this.closeModal('genericModal'); 
+                Toast.show('success', this.t('msg_success'), this.t('profile_updated'));
+            },
+
+            async nukeDB() { if(confirm(this.t('nuke_confirm'))) { indexedDB.deleteDatabase(core.db.name); location.reload(); } },
+
+            async exportBackup() {
+                this.setLoading(true);
+                try {
+                    const backupData = {
+                        cfg: await core.db.op('readonly', 'cfg', 'getAll'),
+                        rec: await core.db.op('readonly', 'rec', 'getAll'),
+                        saved_pos: await core.db.op('readonly', 'saved_pos', 'getAll')
+                    };
+                    const jsonString = JSON.stringify(backupData, null, 2);
+                    const blob = new Blob([jsonString], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `MRIR_Backup_${new Date().toISOString().split('T')[0]}.json`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                } catch (e) { Toast.show('error', this.t('msg_error'), e.message); } 
+                finally { this.setLoading(false); }
+            },
+
+            async importBackup(input) {
+                const file = input.files[0];
+                if (!file) return;
+                if (!confirm(this.t('import_confirm'))) return;
+
+                this.setLoading(true);
+                const reader = new FileReader();
+                reader.onload = async (e) => {
+                    try {
+                        const data = JSON.parse(e.target.result);
+                        if (!data.cfg || !data.rec || !data.saved_pos) throw new Error("Invalid format");
+
+                        const stores = ['cfg', 'rec', 'saved_pos'];
+                        const tx = core.db.db.transaction(stores, 'readwrite');
+                        
+                        await Promise.all(stores.map(s => new Promise((res, rej) => {
+                            const req = tx.objectStore(s).clear();
+                            req.onsuccess = res; req.onerror = rej;
+                        })));
+                        
+                        await Promise.all([
+                            ...data.cfg.map(item => core.db.op('readwrite', 'cfg', 'put', item)),
+                            ...data.rec.map(item => core.db.op('readwrite', 'rec', 'put', item)),
+                            ...data.saved_pos.map(item => core.db.op('readwrite', 'saved_pos', 'put', item))
+                        ]);
+                        
+                        Toast.show('success', this.t('msg_success'), this.t('import_success'));
+                        setTimeout(() => location.reload(), 2000);
+
+                    } catch (err) { Toast.show('error', this.t('msg_error'), this.t('import_error')); } 
+                    finally { this.setLoading(false); input.value = ''; }
+                };
+                reader.readAsText(file);
+            },
+
+            openGenericModal(t,h) { document.getElementById('genericTitle').innerText=t; document.getElementById('genericBody').innerHTML=h; document.getElementById('genericModal').classList.remove('hidden'); },
+            closeModal(id) { document.getElementById(id).classList.add('hidden'); },
+            setLoading(b) { document.getElementById('loadingOverlay').classList.toggle('hidden',!b); }
+        };
+        
+        window.addEventListener('load', () => App.init());
+    </script>
+</body>
+</html>
