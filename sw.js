@@ -6,6 +6,7 @@ const ASSETS = [
   './manifest.json',
   './icon-192.png',
   './icon-512.png',
+  './maskable_icon_x192.png',
   // Adicionando os arquivos locais
   './assets/tailwind.js',
   './assets/xlsx.js',

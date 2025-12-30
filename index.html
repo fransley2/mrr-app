@@ -8,8 +8,6 @@
 	<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 	<meta name="apple-mobile-web-app-title" content="MRR System">
 
-	<link rel="apple-touch-icon" href="./assets/apple-touch-icon.png">
-
     <title>MRR System | Saipem Material Control (v1.0)</title>
 	<link rel="icon" type="image/png" href="favicon-32x32.png">
     
@@ -30,10 +28,9 @@
                 colors: {
                     saipem: { blue: '#002D72', dark: '#001a42', yellow: '#FFCC00', light: '#f8fafc', gray: '#e2e8f0' }
                 },
-                // Usando fontes do sistema para não depender do Google Fonts offline
                 fontFamily: { 
-                    sans: ['ui-sans-serif', 'system-ui', 'sans-serif'], 
-                    mono: ['ui-monospace', 'SFMono-Regular', 'monospace'] 
+    sans: ['Inter', 'sans-serif'], 
+    mono: ['JetBrains Mono', 'monospace']
                 },
                 animation: { 'slide-up': 'slideUp 0.3s ease-out forwards', 'fade-in': 'fadeIn 0.2s ease-out forwards' },
                 keyframes: {
@@ -51,23 +48,6 @@
 <meta name="theme-color" content="#002D72">
 <link rel="apple-touch-icon" href="icon-192.png">
 
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        saipem: { blue: '#002D72', dark: '#001a42', yellow: '#FFCC00', light: '#f8fafc', gray: '#e2e8f0' }
-                    },
-                    fontFamily: { sans: ['Inter', 'sans-serif'], mono: ['JetBrains Mono', 'monospace'] },
-                    animation: { 'slide-up': 'slideUp 0.3s ease-out forwards', 'fade-in': 'fadeIn 0.2s ease-out forwards' },
-                    keyframes: {
-                        fadeIn: { '0%': { opacity: '0' }, '100%': { opacity: '1' } },
-                        slideUp: { '0%': { transform: 'translateY(20px)', opacity: '0' }, '100%': { transform: 'translateY(0)', opacity: '1' } }
-                    }
-                }
-            }
-        }
-    </script>
 
     <style>
 	/* Adicione isso no topo da sua tag <style> */
@@ -404,7 +384,7 @@ header {
                     <!-- Qty Received -->
                     <div class="col-span-1 md:w-1/3 group">
                         <label class="block text-[9px] md:text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1 group-focus-within:text-saipem-blue transition-colors"><span data-i18n="qty_received">Qty Received</span> <span class="text-red-500">*</span></label>
-                        <input type="number" id="inputQty" step="0.001" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 md:p-3 text-sm md:text-lg font-extrabold text-saipem-blue focus:border-saipem-blue focus:ring-1 focus:ring-saipem-blue focus:bg-white shadow-sm outline-none transition-all" required placeholder="0.00">
+                        <input type="number" id="inputQty" inputmode="decimal" enterkeyhint="next" step="0.001" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 md:p-3 text-sm md:text-lg font-extrabold text-saipem-blue focus:border-saipem-blue focus:ring-1 focus:ring-saipem-blue focus:bg-white shadow-sm outline-none transition-all" required placeholder="0.00">
                     </div>
 
                     <!-- Invoice (Ocupa linha inteira no mobile grid se quiser, ou col-span-2) -->
@@ -1730,24 +1710,60 @@ header {
             cancelSurplus() { core.data.pendingSplit = null; document.getElementById('surplusModal').classList.add('hidden'); },
 
             commitSplit(item, split) {
-                if (!split.dims) split.dims = { l:0, w:0, t:0, d:0 };
-                
-                item.splits.push(split);
-                item.received += split.qty;
-                item.balance = item.qtyOrig - item.received;
-                
-                document.getElementById('inputQty').value = '';
-                document.getElementById('inputHeat').value = '';
-                document.getElementById('inputWeight').value = '';
-                const dims = ['dimL','dimW','dimT','dimD'];
-                dims.forEach(d => { if(document.getElementById(d)) document.getElementById(d).value = ''; });
+                try {
+                    // Garante que o objeto dims existe
+                    if (!split.dims) split.dims = { l:0, w:0, t:0, d:0 };
+                    
+                    // 1. Salva os dados no objeto (Memória)
+                    item.splits.push(split);
+                    item.received += split.qty;
+                    item.balance = item.qtyOrig - item.received;
+					
+                    
+                    // 2. Feedback visual
+                    Toast.show('success', 'Lote Adicionado', `Heat: ${split.heat} | Qtd: ${split.qty}`);
 
-                document.getElementById('inputHeat').focus();
-                this.renderModalSplits(item);
-                this.refreshVisibleCard(item.id);
-                core.saveSession(); 
+                    // --- LÓGICA DE PERSISTÊNCIA E INCREMENTO ---
+
+                    // AQUI É A CHAVE: NÃO limpamos os campos inputQty, inputHeat, inputInv, etc.
+                    // Eles permanecem com os valores digitados anteriormente.
+
+                    // Lógica de Auto-Incremento da TAG (Ex: 205 -> 206)
+                    const elTrace = document.getElementById('inputTrace');
+                    if (elTrace && elTrace.value) {
+                        // Procura por números no final da string e soma +1
+                        elTrace.value = elTrace.value.replace(/(\d+)$/, (match) => {
+                            const length = match.length; // Mantém zeros à esquerda se tiver
+                            const nextVal = parseInt(match, 10) + 1;
+                            return String(nextVal).padStart(length, '0');
+                        });
+                    }
+
+                    // Foco e Seleção para agilidade
+                    // Seleciona o texto da TAG para conferência. Se estiver errado, basta digitar por cima.
+                    if (elTrace) {
+                        elTrace.focus();
+                        elTrace.select(); 
+                    } else {
+                        // Se não tiver tag, foca no Heat para a próxima entrada
+                        document.getElementById('inputHeat').focus();
+                    }
+
+                    // --- FIM DA LÓGICA ---
+
+                    // 3. Atualiza a tela e salva no banco
+                    this.renderModalSplits(item);
+                    this.refreshVisibleCard(item.id);
+                    
+                    // CORREÇÃO AQUI: Mudado de this.saveSession() para core.saveSession()
+                    core.saveSession(); 
+
+                } catch (err) {
+                    console.error("Erro no commitSplit:", err);
+                    alert("Erro detalhado: " + err.message);
+                }
             },
-
+			
             editSplit(splitId) {
                 const item = core.getCurrItem();
                 const idx = item.splits.findIndex(s => s.id === splitId);
